@@ -63,7 +63,7 @@ Backend desarrollado con **Django 6.0** y **Django REST Framework** para gestion
 - Fechas de cambio registradas
 
 #### **Control de Acceso**
-- Autenticación por Token
+- Autenticación por sesión + CSRF
 - 4 Roles definidos: Administrador, Almacenista, Profesor, Estudiante
 - Permisos granulares por endpoint
 - Admin moderno y funcional
@@ -204,7 +204,10 @@ Inventario/
 ### 🔐 Autenticación
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/login/` | Obtener token de autenticación |
+| GET | `/api/csrf-token/` | Obtener cookie/token CSRF |
+| POST | `/api/login/` | Iniciar sesión |
+| GET | `/api/usuario-actual/` | Consultar sesión actual |
+| POST | `/api/logout/` | Cerrar sesión |
 
 ### 📁 Categorías
 | Método | Endpoint | Permisos |
@@ -288,7 +291,7 @@ Inventario/
 ## Características de Seguridad
 
 ### Autenticación
-- ✓ Autenticación por Token
+- ✓ Autenticación por sesión + CSRF
 - ✓ Contraseñas encriptadas
 - ✓ CORS configurado para desarrollo
 

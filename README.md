@@ -53,13 +53,18 @@ http://localhost:8000/api/
 
 **Ejemplos de uso:**
 ```bash
-# Login
+# 1) Obtener cookie CSRF
+curl -c cookies.txt http://localhost:8000/api/csrf-token/
+
+# 2) Login por sesión (envía cookie + header CSRF)
 curl -X POST http://localhost:8000/api/login/ \
+  -b cookies.txt -c cookies.txt \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: <csrftoken_de_cookie>" \
   -d '{"username":"admin","password":"admin123"}'
 
-# Obtener token, luego usar en headers
-curl -X GET http://localhost:8000/api/instrumentos/ \
-  -H "Authorization: Token TOKEN_AQUI"
+# 3) Consumir endpoint autenticado usando la cookie de sesión
+curl -X GET http://localhost:8000/api/instrumentos/ -b cookies.txt
 ```
 
 ### Panel Administrativo
@@ -86,6 +91,7 @@ Contraseña: admin123
 ### Backend
 - [README_BACKEND.md](README_BACKEND.md) - Guía completa del backend
 - [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Documentación detallada de endpoints
+- [EVIDENCIA_GA8-220501096-AA1-EV01.md](EVIDENCIA_GA8-220501096-AA1-EV01.md) - Documento de evidencia academica
 
 ### Frontend (Próximamente)
 - [miapi/README.md](miapi/README.md) - Instrucciones de Angular
@@ -120,7 +126,7 @@ Contraseña: admin123
 - ✓ Exportación masiva a Excel
 
 ### 🔒 Seguridad
-- ✓ Autenticación por Token
+- ✓ Autenticación por sesión + CSRF
 - ✓ 4 Roles con permisos granulares
 - ✓ Auditoría completa
 - ✓ Validaciones en todos los campos
@@ -255,11 +261,14 @@ pip install psycopg2-binary
 # O cambiar en .env: DB_PORT=5432
 ```
 
-### Errores de Token/Autenticación
+### Errores de sesión/CSRF
 ```bash
-# Obtener nuevo token
+# Renovar cookie CSRF y volver a autenticar sesión
+curl -c cookies.txt http://localhost:8000/api/csrf-token/
 curl -X POST http://localhost:8000/api/login/ \
+  -b cookies.txt -c cookies.txt \
   -H "Content-Type: application/json" \
+  -H "X-CSRFToken: <csrftoken_de_cookie>" \
   -d '{"username":"admin","password":"admin123"}'
 ```
 

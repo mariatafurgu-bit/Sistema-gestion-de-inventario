@@ -109,7 +109,9 @@ class UsuarioSerializer(serializers.ModelSerializer):
 class PrestamoSerializer(serializers.ModelSerializer):
 
     instrumento_nombre = serializers.ReadOnlyField(source='instrumento.nombre')
+    instrumento_referencia = serializers.ReadOnlyField(source='instrumento.referencia')
     usuario_nombre = serializers.ReadOnlyField(source='usuario.nombre')
+    usuario_documento = serializers.ReadOnlyField(source='usuario.documento')
     instrumento_estado = serializers.ReadOnlyField(source='instrumento.estado')
 
     class Meta:
@@ -181,6 +183,7 @@ class ReporteVencidoSerializer(serializers.ModelSerializer):
             'usuario_correo',
             'fecha_prestamo',
             'fecha_vencimiento',
+            'dias_vencimiento',
             'estado'
         ]
 

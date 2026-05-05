@@ -2,10 +2,18 @@
 
 ## Configuración Base
 - **URL Base**: `http://localhost:8000/api/`
-- **Autenticación**: Token (enviar header `Authorization: Token <token>`)
+- **Autenticación**: Sesión + CSRF (cookies de sesión y header `X-CSRFToken` en métodos mutables)
 - **Formato de Respuesta**: JSON
 
 ## Autenticación
+### Obtener CSRF Token
+```
+GET /api/csrf-token/
+Response: {
+  "csrfToken": "..."
+}
+```
+
 ### Login
 ```
 POST /api/login/
@@ -14,8 +22,22 @@ Body: {
   "password": "contraseña"
 }
 Response: {
-  "token": "token_autenticacion"
+  "user_id": 1,
+  "username": "usuario",
+  "email": "usuario@correo.com",
+  "rol": "administrador|almacenista",
+  "mensaje": "Login exitoso como ..."
 }
+```
+
+### Usuario actual
+```
+GET /api/usuario-actual/
+```
+
+### Logout
+```
+POST /api/logout/
 ```
 
 ---
@@ -470,7 +492,7 @@ Response (400):
 
 ## Notas Importantes
 
-1. **Autenticación**: Todo endpoint requiere un token válido (excepto `/api/login/`)
+1. **Autenticación**: Los endpoints protegidos requieren sesión activa; para operaciones mutables usar CSRF (`/api/csrf-token/` + `X-CSRFToken`)
 2. **Paginación**: Los listados usan paginación por defecto (20 items por página)
 3. **Búsqueda**: El parámetro `search` es case-insensitive
 4. **Ordenamiento**: Usar `-` al inicio para orden descendente
@@ -483,16 +505,21 @@ Response (400):
 
 ### Login
 ```bash
+curl -c cookies.txt http://localhost:8000/api/csrf-token/
+
 curl -X POST http://localhost:8000/api/login/ \
+  -b cookies.txt -c cookies.txt \
   -H "Content-Type: application/json" \
+  -H "X-CSRFToken: <csrftoken_de_cookie>" \
   -d '{"username":"admin","password":"admin123"}'
 ```
 
 ### Crear Instrumento
 ```bash
 curl -X POST http://localhost:8000/api/instrumentos/ \
-  -H "Authorization: Token YOUR_TOKEN" \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
+  -H "X-CSRFToken: <csrftoken_de_cookie>" \
   -d '{
     "nombre": "Violín Yamaha",
     "referencia": "VLN-001",
@@ -504,7 +531,7 @@ curl -X POST http://localhost:8000/api/instrumentos/ \
 ### Obtener Préstamos Vencidos
 ```bash
 curl -X GET http://localhost:8000/api/prestamos/vencidos/ \
-  -H "Authorization: Token YOUR_TOKEN"
+  -b cookies.txt
 ```
 
 ---

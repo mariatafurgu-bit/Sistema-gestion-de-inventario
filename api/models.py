@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
+from datetime import timedelta
 
 
 # =========================
@@ -45,6 +46,10 @@ class Instrumento(models.Model):
         default='disponible'
     )
     cantidad = models.PositiveIntegerField(default=1)
+    ubicacion_fisica = models.CharField(max_length=100, blank=True, null=True)
+    valor_reemplazo = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
 
     # =========================
@@ -197,6 +202,9 @@ class Usuario(models.Model):
         choices=TIPOS,
         default='estudiante'
     )
+    activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
 # =========================
 # PRESTAMO
@@ -220,7 +228,11 @@ class Prestamo(models.Model):
     )
 
     fecha_prestamo = models.DateField(blank=True, null=True)
+    fecha_vencimiento = models.DateField(blank=True, null=True)
     fecha_devolucion = models.DateField(blank=True, null=True)
+    dias_permitidos = models.PositiveIntegerField(default=7)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     estado = models.CharField(
         max_length=20,
@@ -243,6 +255,9 @@ class Prestamo(models.Model):
 
         if not self.fecha_prestamo:
             self.fecha_prestamo = timezone.now().date()
+
+        if self.estado == 'enuso' and not self.fecha_vencimiento:
+            self.fecha_vencimiento = self.fecha_prestamo + timedelta(days=self.dias_permitidos)
 
         super().save(*args, **kwargs)
 

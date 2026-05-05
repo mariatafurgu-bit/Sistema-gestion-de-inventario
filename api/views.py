@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, BasePermission, AllowAny
-from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError, PermissionDenied
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.http import HttpResponse
@@ -91,6 +91,9 @@ class InstrumentoViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             # Permitir lectura a cualquier autenticado
             permission_classes = [IsAuthenticated]
+        elif self.action in ['historial']:
+            # Historial de cambios: solo administrador
+            permission_classes = [IsAuthenticated, EsAdministrador]
         else:
             # Restringir escritura a almacenista/admin
             permission_classes = [IsAuthenticated, EsAlmacenistaOAdministrador]
@@ -106,19 +109,13 @@ class InstrumentoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Crear instrumento: SOLO ADMINISTRADOR"""
         if not (hasattr(self.request.user, 'perfil') and self.request.user.perfil.rol == 'administrador'):
-            return Response(
-                {"error": "❌ No tienes permiso para crear instrumentos. Solo el administrador puede."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            raise PermissionDenied("No tienes permiso para crear instrumentos. Solo el administrador puede.")
         serializer.save()
 
     def perform_update(self, serializer):
         """Editar instrumento: ADMINISTRADOR y ALMACENISTA"""
         if not (hasattr(self.request.user, 'perfil') and self.request.user.perfil.rol in ['administrador', 'almacenista']):
-            return Response(
-                {"error": "❌ No tienes permiso para editar instrumentos."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            raise PermissionDenied("No tienes permiso para editar instrumentos.")
         serializer.save()
 
     def destroy(self, request, *args, **kwargs):
@@ -134,6 +131,12 @@ class InstrumentoViewSet(viewsets.ModelViewSet):
     def dar_baja(self, request, pk=None):
         """Da de baja un instrumento (cambio de estado a 'baja')."""
         instrumento = self.get_object()
+
+        if not (hasattr(request.user, 'perfil') and request.user.perfil.rol == 'administrador'):
+            return Response(
+                {"error": "No tienes permiso para dar de baja instrumentos. Solo administrador."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         if instrumento.estado == 'prestado':
             return Response(
@@ -683,6 +686,11 @@ def login_personalizado(request):
     # Verificar que el usuario sea administrador o almacenista
     rol = 'usuario'
     tiene_acceso = False
+
+    # Permitir acceso inmediato a superusuarios/staff aunque no tengan perfil creado.
+    if user.is_superuser or user.is_staff:
+        rol = 'administrador'
+        tiene_acceso = True
     
     try:
         if hasattr(user, 'perfil'):
@@ -742,12 +750,18 @@ def obtener_usuario_actual(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def logout_personalizado(request):
     """
     Cierra la sesión del usuario actual.
+    Es idempotente: si no hay sesión activa, responde 200 igualmente.
     """
-    logout(request)
+    if request.user.is_authenticated:
+        logout(request)
+        mensaje = 'Sesión cerrada correctamente'
+    else:
+        mensaje = 'No había una sesión activa'
+
     return Response({
-        'mensaje': 'Sesión cerrada correctamente'
+        'mensaje': mensaje
     }, status=status.HTTP_200_OK)

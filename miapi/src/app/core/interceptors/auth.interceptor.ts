@@ -23,9 +23,6 @@ export class AuthInterceptor implements HttpInterceptor {
     // Clonar la solicitud con credenciales
     let clonedRequest = request.clone({
       withCredentials: true,  // Permitir envío de cookies de sesión
-      setHeaders: {
-        'Content-Type': 'application/json'
-      }
     });
     
     // Si hay CSRF token y NO es una solicitud GET, incluirlo en el header X-CSRFToken
@@ -43,19 +40,39 @@ export class AuthInterceptor implements HttpInterceptor {
     return next.handle(clonedRequest).pipe(
       catchError((error: HttpErrorResponse) => {
         // Manejo de errores de autenticación
+        const isAuthEndpoint = this.isAuthEndpoint(error.url || request.url);
+
         if (error.status === 401 || error.status === 403) {
           console.error('❌ Error 401/403 - Sesión inválida o sin permisos');
           console.error('   URL:', error.url);
           console.error('   Status:', error.status);
           console.error('   Detalle:', error.error?.detail || error.error?.error || error.message);
           console.error('   CSRF token en cookie:', !!csrfToken);
-          
-          // Limpiar sesión
-          this.authService.logout();
-          this.router.navigate(['/login']);
-          
-          // Mostrar alerta al usuario
-          alert('⚠️ Tu sesión ha expirado o no tienes permiso. Por favor, inicia sesión de nuevo.');
+
+          // Para login/csrf dejamos que el componente de login maneje el mensaje real.
+          if (isAuthEndpoint) {
+            if ((error.url || request.url).includes('/api/login/')) {
+              window.dispatchEvent(new CustomEvent('login-http-error', {
+                detail: {
+                  status: error.status,
+                  message: error.error?.error || error.error?.detail || 'Credenciales inválidas'
+                }
+              }));
+            }
+            return throwError(() => error);
+          }
+
+          // En 401 sí cerramos sesión (token/cookie inválida o expirada).
+          if (error.status === 401) {
+            this.authService.logout();
+            this.router.navigate(['/login']);
+            alert('⚠️ Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
+          }
+
+          // En 403 no cerramos sesión automáticamente: puede ser solo falta de permisos.
+          if (error.status === 403) {
+            console.warn('⚠️ 403 por permisos, se mantiene la sesión activa.');
+          }
         } else if (error.status === 0) {
           console.error('❌ Error de conexión - El servidor no está disponible');
           alert('🔌 No se puede conectar al servidor. Verifica que Django esté ejecutándose en http://localhost:8000');
@@ -69,6 +86,15 @@ export class AuthInterceptor implements HttpInterceptor {
         
         return throwError(() => error);
       })
+    );
+  }
+
+  private isAuthEndpoint(url: string): boolean {
+    return (
+      url.includes('/api/login/') ||
+      url.includes('/api/csrf-token/') ||
+      url.includes('/api/logout/') ||
+      url.includes('/api/usuario-actual/')
     );
   }
 

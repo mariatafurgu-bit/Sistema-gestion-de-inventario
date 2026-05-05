@@ -1,10 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, firstValueFrom } from 'rxjs';
+import { timeout } from 'rxjs/operators';
 
 @Component({
   selector: 'app-login',
@@ -25,15 +25,34 @@ export class LoginComponent implements OnInit, OnDestroy {
   showPassword: boolean = false;
   usernameError: string = '';
   passwordError: string = '';
+  formSubmitted: boolean = false;
+  private loginFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private loginHttpErrorHandler: ((event: Event) => void) | null = null;
   
   private destroy$ = new Subject<void>();
 
   constructor(
     private authService: AuthService, 
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef,
+    private zone: NgZone,
   ) {}
 
   ngOnInit(): void {
+    this.loginHttpErrorHandler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ status?: number; message?: string }>;
+
+      this.zone.run(() => {
+        this.clearLoginFallbackTimer();
+        this.loading = false;
+        this.success = '';
+        this.error = customEvent.detail?.message || 'Usuario o contraseña incorrecta';
+        this.cdr.detectChanges();
+      });
+    };
+
+    window.addEventListener('login-http-error', this.loginHttpErrorHandler);
+
     // Si ya está autenticado, ir al dashboard
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/dashboard']);
@@ -41,6 +60,11 @@ export class LoginComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.loginHttpErrorHandler) {
+      window.removeEventListener('login-http-error', this.loginHttpErrorHandler);
+    }
+
+    this.clearLoginFallbackTimer();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -49,6 +73,11 @@ export class LoginComponent implements OnInit, OnDestroy {
    * Valida el username en tiempo real
    */
   validateUsername(): void {
+    if (this.loading) {
+      this.loading = false;
+      this.clearLoginFallbackTimer();
+    }
+
     this.usernameError = '';
     if (!this.username || this.username.trim() === '') {
       this.usernameError = 'Usuario requerido';
@@ -64,6 +93,11 @@ export class LoginComponent implements OnInit, OnDestroy {
    * Valida la contraseña en tiempo real
    */
   validatePassword(): void {
+    if (this.loading) {
+      this.loading = false;
+      this.clearLoginFallbackTimer();
+    }
+
     this.passwordError = '';
     if (!this.password) {
       this.passwordError = 'Contraseña requerida';
@@ -88,9 +122,18 @@ export class LoginComponent implements OnInit, OnDestroy {
    * Realiza la autenticación contra el backend
    */
   login(): void {
+    this.executeLogin();
+  }
+
+  private async executeLogin(): Promise<void> {
+    if (this.loading) {
+      return;
+    }
+
     // Limpiar mensajes previos
     this.error = '';
     this.success = '';
+    this.formSubmitted = true;
     this.validateUsername();
     this.validatePassword();
 
@@ -104,43 +147,37 @@ export class LoginComponent implements OnInit, OnDestroy {
     // Iniciar proceso de login
     this.loading = true;
 
-    // Obtener CSRF token - esperar a que se establezca la cookie
-    this.authService.obtenerCsrfToken()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          console.log('✅ CSRF token obtenido');
-          
-          // Pequeña pausa para asegurar que la cookie está establecida
-          setTimeout(() => {
-            // Ahora hacer login
-            this.authService
-              .login(this.username.trim(), this.password)
-              .pipe(takeUntil(this.destroy$))
-              .subscribe({
-                next: (response: any) => {
-                  this.success = '✅ Autenticación exitosa. Redirigiendo al dashboard...';
-                  console.log('✅ Login exitoso:', response.username, 'rol:', response.rol);
-                  
-                  // Ir directamente al dashboard
-                  setTimeout(() => {
-                    this.loading = false;
-                    this.router.navigate(['/dashboard']);
-                  }, 300);
-                },
-                error: (err: any) => {
-                  this.loading = false;
-                  this.handleLoginError(err);
-                }
-              });
-          }, 100);  // 100ms de pausa para establecer la cookie
-        },
-        error: (err) => {
-          this.loading = false;
-          this.error = '⚠️ Error de conexión. Verifica que Django esté corriendo en http://localhost:8000';
-          console.error('❌ Error obteniendo CSRF token:', err);
-        }
-      });
+    // Failsafe: evita que la UI quede bloqueada si alguna capa no finaliza correctamente.
+    this.clearLoginFallbackTimer();
+    this.loginFallbackTimer = setTimeout(() => {
+      if (this.loading) {
+        this.loading = false;
+        this.error = '⏱️ No se pudo completar el login. Verifica credenciales e intenta nuevamente.';
+      }
+    }, 20000);
+
+    try {
+      await firstValueFrom(
+        this.authService.obtenerCsrfToken().pipe(timeout(15000))
+      );
+
+      const response = await firstValueFrom(
+        this.authService.login(this.username.trim(), this.password).pipe(timeout(15000))
+      );
+
+      this.success = '✅ Autenticación exitosa. Redirigiendo al dashboard...';
+      console.log('✅ Login exitoso:', response.username, 'rol:', response.rol);
+
+      setTimeout(() => {
+        this.redirectByRole(response?.rol);
+      }, 300);
+    } catch (err: any) {
+      this.handleLoginError(err);
+    } finally {
+      this.clearLoginFallbackTimer();
+      this.loading = false;
+      this.cdr.detectChanges();
+    }
   }
 
 
@@ -150,6 +187,11 @@ export class LoginComponent implements OnInit, OnDestroy {
   private handleLoginError(err: any): void {
     // Limpiar éxito si hay error
     this.success = '';
+
+    if (err?.name === 'TimeoutError') {
+      this.error = '⏱️ El servidor tardó demasiado en responder. Intenta de nuevo.';
+      return;
+    }
 
     // Mapear errores por código HTTP
     if (err.status === 0) {
@@ -164,9 +206,9 @@ export class LoginComponent implements OnInit, OnDestroy {
         this.error = detail || '❌ Datos inválidos';
       }
     } else if (err.status === 401) {
-      this.error = '❌ Credenciales inválidas';
+      this.error = err.error?.error || 'Usuario o contraseña incorrecta';
     } else if (err.status === 403) {
-      this.error = '🚫 Acceso denegado';
+      this.error = 'Acceso denegado';
     } else if (err.status === 404) {
       this.error = '❌ Usuario no encontrado';
     } else if (err.status === 429) {
@@ -205,7 +247,24 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.success = '';
     this.usernameError = '';
     this.passwordError = '';
+    this.formSubmitted = false;
     this.showPassword = false;
+  }
+
+  private clearLoginFallbackTimer(): void {
+    if (this.loginFallbackTimer) {
+      clearTimeout(this.loginFallbackTimer);
+      this.loginFallbackTimer = null;
+    }
+  }
+
+  private redirectByRole(role: string | undefined): void {
+    if (role === 'almacenista') {
+      this.router.navigate(['/dashboard']);
+      return;
+    }
+
+    this.router.navigate(['/dashboard']);
   }
 }
 

@@ -1,0 +1,75 @@
+{
+  "info": {
+    "_postman_id": "invento-collection-001",
+    "name": "Inventario API - Coleccion",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Obtener CSRF",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/csrf-token/"
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\": \"admin\", \"password\": \"admin\"}"
+        },
+        "url": "{{base_url}}/login/"
+      }
+    },
+    {
+      "name": "Listar Categorias",
+      "request": { "method": "GET", "header": [], "url": "{{base_url}}/categorias/" }
+    },
+    {
+      "name": "Crear Categoria",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-CSRFToken", "value": "{{csrf_token}}" }],
+        "body": { "mode": "raw", "raw": "{\"nombre\": \"Prueba Cat\", \"descripcion\": \"Descripcion\"}" },
+        "url": "{{base_url}}/categorias/"
+      }
+    },
+    {
+      "name": "Listar Instrumentos",
+      "request": { "method": "GET", "header": [], "url": "{{base_url}}/instrumentos/" }
+    },
+    {
+      "name": "Crear Instrumento",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-CSRFToken", "value": "{{csrf_token}}" }],
+        "body": { "mode": "raw", "raw": "{\"nombre\": \"Violin Prueba\", \"referencia\": \"V-001\", \"marca\": \"Yamaha\", \"modelo\": \"X\", \"fecha_adquisicion\": \"2024-01-01\", \"categoria\": 1, \"cantidad\": 1}" },
+        "url": "{{base_url}}/instrumentos/"
+      }
+    },
+    {
+      "name": "Crear Prestamo",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-CSRFToken", "value": "{{csrf_token}}" }],
+        "body": { "mode": "raw", "raw": "{\"instrumento\": 1, \"usuario\": 1, \"dias_permitidos\": 7, \"estado\": \"enuso\"}" },
+        "url": "{{base_url}}/prestamos/"
+      }
+    },
+    {
+      "name": "Devolver Prestamo",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-CSRFToken", "value": "{{csrf_token}}" }],
+        "body": { "mode": "raw", "raw": "{\"observacion\": \"Devuelto OK\"}" },
+        "url": "{{base_url}}/prestamos/1/devolver/"
+      }
+    }
+  ]
+}

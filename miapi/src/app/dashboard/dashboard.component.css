@@ -33,8 +33,21 @@
 
 .header-logo {
     background: #2563EB;
-    padding: 0.75rem;
+    padding: 0.5rem;
     border-radius: 8px;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logo-image {
+    width: 105px;
+    height: 105px;
+    object-fit: contain;
+    display: block;
+    filter: brightness(0) invert(1);
 }
 
 .header-logo svg {
@@ -74,6 +87,11 @@
     fill: #4B5563;
 }
 
+.user-info .bi {
+    font-size: 1.1rem;
+    color: #4B5563;
+}
+
 .user-details p:first-child {
     font-weight: 500;
     color: #111827;
@@ -83,6 +101,17 @@
 .user-details p:last-child {
     color: #6B7280;
     font-size: 0.875rem;
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.user-details p {
+    margin: 0;
+    line-height: 1.2;
 }
 
 .btn {
@@ -113,10 +142,47 @@
     height: 20px;
 }
 
+.btn .bi {
+    font-size: 1rem;
+    line-height: 1;
+}
+
 .main-content {
     max-width: 1280px;
     margin: 0 auto;
     padding: 2rem 1rem;
+}
+
+.alerts-header .bi {
+    color: #DC2626;
+    font-size: 1.05rem;
+}
+
+.alert-item .bi {
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.btn-icon .bi {
+    font-size: 0.95rem;
+}
+
+.info-row .bi {
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.btn-return .bi {
+    font-size: 0.95rem;
+}
+
+.dropdown-button .bi {
+    font-size: 1rem;
+}
+
+.dropdown-icon .bi {
+    font-size: 1rem;
 }
 
 /* STATS CARDS */
@@ -451,6 +517,24 @@
     background: #FEE2E2;
 }
 
+.btn-history {
+    color: #7C3AED;
+    background: transparent;
+}
+
+.btn-history:hover {
+    background: #F3E8FF;
+}
+
+.btn-out {
+    color: #B45309;
+    background: transparent;
+}
+
+.btn-out:hover {
+    background: #FEF3C7;
+}
+
 .instrument-details {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -503,6 +587,12 @@
     border-top: 1px solid #F3F4F6;
 }
 
+.instrument-loan-action {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #F3F4F6;
+}
+
 .observations-label {
     font-size: 0.75rem;
     color: #6B7280;
@@ -534,6 +624,8 @@
 }
 
 .modal {
+    display: block;
+    position: relative;
     background: white;
     border-radius: 12px;
     max-width: 800px;
@@ -558,6 +650,21 @@
 .modal-header h2 {
     font-size: 1.25rem;
     color: #111827;
+}
+
+.loan-modal-error {
+    display: none;
+    margin: 1rem 1.5rem 0;
+    padding: 0.75rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 0.9rem;
+}
+
+.loan-modal-error.active {
+    display: block;
 }
 
 .modal-close {
@@ -817,6 +924,34 @@ textarea.form-input {
     background: #F9FAFB;
 }
 
+.history-list {
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+}
+
+.history-item-row {
+    align-items: center;
+}
+
+.history-status {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+}
+
+.history-active {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.history-returned {
+    background: #DCFCE7;
+    color: #166534;
+}
+
 .loan-details h4 {
     font-size: 1rem;
     font-weight: 500;
@@ -984,6 +1119,56 @@ textarea.form-input {
     border-radius: 9999px;
     font-size: 0.875rem;
     font-weight: 500;
+}
+
+.history-modal-content {
+    padding: 1.5rem;
+}
+
+.history-loading {
+    font-size: 0.95rem;
+    color: #6B7280;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.history-item {
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    background: #F9FAFB;
+}
+
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.35rem;
+}
+
+.history-type {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #4F46E5;
+}
+
+.history-date {
+    font-size: 0.8rem;
+    color: #6B7280;
+}
+
+.history-state,
+.history-meta,
+.history-note {
+    margin: 0.2rem 0;
+    font-size: 0.88rem;
+    color: #374151;
 }
 
 .hide-mobile {

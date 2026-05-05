@@ -67,14 +67,20 @@ export class AuthService {
    */
   logout(): void {
     console.log('👋 Logout realizado');
+    // Limpiar estado local de inmediato para no depender de la respuesta HTTP.
+    this.currentUserSubject.next(null);
+
     this.http.post(`${this.apiUrl}/logout/`, {}, { withCredentials: true })
       .subscribe({
         next: () => {
-          this.currentUserSubject.next(null);
           console.log('✅ Sesión cerrada en servidor');
         },
         error: (err) => {
-          this.currentUserSubject.next(null);
+          if (err?.status === 401 || err?.status === 403) {
+            console.log('ℹ️ Logout sin sesión activa en servidor');
+            return;
+          }
+
           console.error('Error al cerrar sesión:', err);
         }
       });

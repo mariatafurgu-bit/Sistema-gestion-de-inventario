@@ -1,19 +1,31 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { CommonModule  } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 import { InstrumentoService } from '../services/instrumento.service';
 import { PrestamoService } from '../services/prestamo.service';
 
+declare global {
+  interface Window {
+    dashboard?: DashboardComponent;
+  }
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './dashboard.component.html',
-  styleUrls: ['./dashboard.component.css']
+  styleUrls: ['./dashboard.component.css'],
+  encapsulation: ViewEncapsulation.None
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   currentUser: any;
+  historialMovimientos: any[] = [];
+  historialInstrumentoNombre: string = '';
+  historialLoading: boolean = false;
+  instrumentoParaBaja: any = null;
+  categorias: any[] = [];
   
   // Data Storage
   instruments: any[] = [];
@@ -37,6 +49,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    window.dashboard = this;
+
     // ✅ Obtener usuario desde el servidor (valida sesión)
     this.authService.obtenerUsuarioActual().subscribe({
       next: (userData) => {
@@ -64,7 +78,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Limpiar si es necesario
+    if (window.dashboard === this) {
+      window.dashboard = undefined;
+    }
   }
 
   // ==================
@@ -85,6 +101,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadAttempts++;
 
     console.log('📡 Cargando instrumentos desde API... (intento ' + this.loadAttempts + ')');
+    // Categorías solo se requieren para el formulario de alta (solo administrador).
+    if (this.isAdmin()) {
+      this.instrumentoService.getCategorias().subscribe({
+        next: (response: any) => {
+          this.categorias = response.results || response || [];
+        },
+        error: (err) => {
+          console.error('❌ Error cargando categorías:', err);
+        }
+      });
+    }
+
     // Cargar instrumentos desde la base de datos
     this.instrumentoService.getInstrumentos().subscribe({
       next: (response: any) => {
@@ -120,6 +148,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         console.log('✅ Préstamos cargados:', response);
         this.loans = response.results || response || [];
+        this.renderAlerts();
+        this.renderLoans();
+        this.renderLoanHistory();
       },
       error: (err) => {
         console.error('❌ Error cargando préstamos:', err);
@@ -163,13 +194,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.renderAlerts();
     this.renderInstruments();
     this.renderLoans();
+    this.renderLoanHistory();
   }
 
   renderStats(): void {
     const total = this.instruments.length;
-    const disponibles = this.instruments.filter(i => i.estado === 'Disponible').length;
-    const enUso = this.instruments.filter(i => i.estado === 'En Uso').length;
-    const enReparacion = this.instruments.filter(i => i.estado === 'En Reparación').length;
+    const disponibles = this.instruments.filter(i => i.estado === 'disponible').length;
+    const enUso = this.instruments.filter(i => i.estado === 'prestado').length;
+    const enReparacion = this.instruments.filter(i => i.estado === 'mantenimiento').length;
 
     const stats = [
       { label: 'Total Instrumentos', value: total, color: 'blue', icon: 'package' },
@@ -209,31 +241,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const activeLoans = this.loans.filter((l: any) => l.estado === 'Activo');
+    const activeLoans = this.loans.filter((l: any) => l.estado === 'enuso');
     const alerts: any[] = [];
 
     activeLoans.forEach((loan: any) => {
-      if (!loan.fechaDevolucionEstimada) return;
+      if (!loan.fecha_vencimiento) return;
       
-      const dueDate = new Date(loan.fechaDevolucionEstimada);
+      const dueDate = new Date(loan.fecha_vencimiento);
       dueDate.setHours(0, 0, 0, 0);
       
-      const instrument = this.instruments.find(i => i.id === loan.instrumentoId);
-      const instrumentName = instrument ? `${instrument.nombre} (${instrument.codigo})` : 'Instrumento';
+      const instrumentName = loan.instrumento_nombre || 'Instrumento';
+      const userName = loan.usuario_nombre || 'Usuario';
       
       if (dueDate < today) {
         const days = Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
         alerts.push({
           type: 'danger',
           title: `Préstamo Vencido - ${days} días de retraso`,
-          text: `${loan.estudianteNombre} - ${instrumentName}`,
-          date: `Fecha límite: ${this.formatDate(loan.fechaDevolucionEstimada)}`
+          text: `${userName} - ${instrumentName}`,
+          date: `Fecha límite: ${this.formatDate(loan.fecha_vencimiento)}`
         });
       } else if (dueDate.getTime() === today.getTime()) {
         alerts.push({
           type: 'warning',
           title: 'Vence Hoy',
-          text: `${loan.estudianteNombre} - ${instrumentName}`
+          text: `${userName} - ${instrumentName}`
         });
       } else {
         const threeDays = new Date(today);
@@ -242,8 +274,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
           alerts.push({
             type: 'info',
             title: 'Próximo a Vencer',
-            text: `${loan.estudianteNombre} - ${instrumentName}`,
-            date: `Fecha límite: ${this.formatDate(loan.fechaDevolucionEstimada)}`
+            text: `${userName} - ${instrumentName}`,
+            date: `Fecha límite: ${this.formatDate(loan.fecha_vencimiento)}`
           });
         }
       }
@@ -257,21 +289,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const alertIcon = '<path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>';
-    const warningIcon = '<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>';
-    const clockIcon = '<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>';
-
     panel.innerHTML = `
       <div class="alerts-panel">
         <div class="alerts-header">
-          <svg viewBox="0 0 24 24">${alertIcon}</svg>
+          <i class="bi bi-bell"></i>
           <span>Alertas de Devolución (${alerts.length})</span>
         </div>
         ${alerts.map(alert => `
           <div class="alert-item alert-${alert.type}">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              ${alert.type === 'danger' ? warningIcon : clockIcon}
-            </svg>
+            <i class="bi ${alert.type === 'danger' ? 'bi-exclamation-triangle' : 'bi-clock-history'}"></i>
             <div class="alert-content">
               <p>${alert.title}</p>
               <p>${alert.text}</p>
@@ -300,14 +326,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const canViewHistory = this.isAdmin();
+    const canManageLoans = this.isAdmin() || this.isStorekeeper();
+
     grid.innerHTML = this.instruments.map((inst: any) => {
-      const badgeClasses: { [key: string]: string } = {
-        'Disponible': 'badge-available',
-        'En Uso': 'badge-in-use',
-        'En Reparación': 'badge-repair',
-        'Fuera de Servicio': 'badge-out-of-service'
-      };
-      const badgeClass = badgeClasses[inst.estado] || 'badge-available';
+      const badgeClass = this.getBadgeClass(inst.estado);
+      const estadoLabel = this.getEstadoLabel(inst.estado);
+      const referencia = inst.referencia || inst.codigo || 'N/A';
+      const numeroSerie = inst.numero_serie || inst.numeroSerie || 'N/A';
+      const categoria = inst.categoria_nombre || inst.categoria || 'Sin categoría';
+      const ubicacion = inst.ubicacion_fisica || inst.ubicacion || 'Sin ubicación';
 
       const conditionColors: any = {
         'Excelente': '#16A34A',
@@ -322,20 +350,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
             <div class="instrument-title">
               <div class="instrument-name">
                 <h3>${inst.nombre}</h3>
-                <span class="badge ${badgeClass}">${inst.estado}</span>
+                <span class="badge ${badgeClass}">${estadoLabel}</span>
               </div>
-              <p class="instrument-code">Código: ${inst.codigo}</p>
+              <p class="instrument-code">Código: ${referencia}</p>
             </div>
             <div class="instrument-actions">
+              ${canViewHistory ? `
+              <button class="btn-icon btn-history" onclick="dashboard.openHistoryModal('${inst.id}')" title="Ver historial">
+                <i class="bi bi-clock-history"></i>
+              </button>
+              ` : ''}
+              ${(this.isAdmin() && inst.estado !== 'baja' && inst.estado !== 'prestado') ? `
+              <button class="btn-icon btn-out" onclick="dashboard.openDarBajaModal('${inst.id}')" title="Dar de baja">
+                <i class="bi bi-slash-circle"></i>
+              </button>
+              ` : ''}
               <button class="btn-icon btn-edit" onclick="dashboard.editInstrument('${inst.id}')" title="Editar">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                </svg>
+                <i class="bi bi-pencil"></i>
               </button>
               <button class="btn-icon btn-delete" onclick="dashboard.deleteInstrument('${inst.id}')" title="Eliminar">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                </svg>
+                <i class="bi bi-trash"></i>
               </button>
             </div>
           </div>
@@ -343,34 +377,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
           <div class="instrument-details">
             <div class="detail-item">
               <p class="detail-label">Categoría</p>
-              <p class="detail-value">${inst.categoria}</p>
+              <p class="detail-value">${categoria}</p>
             </div>
             <div class="detail-item">
               <p class="detail-label">Marca / Modelo</p>
-              <p class="detail-value">${inst.marca} ${inst.modelo}</p>
+              <p class="detail-value">${inst.marca || ''} ${inst.modelo || ''}</p>
             </div>
             <div class="detail-item">
               <p class="detail-label">No. Serie</p>
-              <p class="detail-value">${inst.numeroSerie}</p>
+              <p class="detail-value">${numeroSerie}</p>
             </div>
             <div class="detail-item">
               <p class="detail-label">Condición</p>
-              <p class="detail-value" style="color: ${conditionColors[inst.condicion]}">${inst.condicion}</p>
+              <p class="detail-value" style="color: ${conditionColors[inst.condicion] || '#374151'}">${inst.condicion || 'Sin dato'}</p>
             </div>
           </div>
 
           <div class="instrument-info">
             <div class="info-row">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              <span>${inst.ubicacion}</span>
+              <i class="bi bi-geo-alt"></i>
+              <span>${ubicacion}</span>
             </div>
             ${inst.responsable ? `
               <div class="info-row">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
+                <i class="bi bi-person"></i>
                 <span>${inst.responsable}</span>
               </div>
             ` : ''}
@@ -382,13 +412,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
               <p class="observations-text">${inst.observaciones}</p>
             </div>
           ` : ''}
+
+          ${(canManageLoans && inst.estado === 'prestado') ? `
+            <div class="instrument-loan-action">
+              <button class="btn-return" onclick="dashboard.returnInstrumentFromCard('${inst.id}')">
+                <i class="bi bi-arrow-return-left"></i>
+                Registrar devolución
+              </button>
+            </div>
+          ` : ''}
         </div>
       `;
     }).join('');
   }
 
   renderLoans(): void {
-    const activeLoans = this.loans.filter((l: any) => l.estado === 'Activo');
+    const activeLoans = this.loans.filter((l: any) => l.estado === 'enuso');
     const container = document.getElementById('loansList');
     if (!container) return;
 
@@ -411,20 +450,68 @@ export class DashboardComponent implements OnInit, OnDestroy {
         ${activeLoans.map((loan: any) => `
           <div class="loan-item">
             <div class="loan-details">
-              <h4>${loan.instrumentoNombre} <span style="color: #6B7280; font-weight: normal;">(${loan.instrumentoCodigo})</span></h4>
-              <p><strong>Estudiante:</strong> ${loan.estudianteNombre}</p>
-              <p><strong>ID:</strong> ${loan.estudianteIdentificacion}</p>
-              <p><strong>Fecha de Préstamo:</strong> ${this.formatDate(loan.fechaPrestamo)}</p>
-              ${loan.fechaDevolucionEstimada ? `<p><strong>Devolución Estimada:</strong> ${this.formatDate(loan.fechaDevolucionEstimada)}</p>` : ''}
+              <h4>${loan.instrumento_nombre || 'Instrumento'} <span style="color: #6B7280; font-weight: normal;">(${loan.instrumento_referencia || 'N/A'})</span></h4>
+              <p><strong>Usuario:</strong> ${loan.usuario_nombre || 'N/A'}</p>
+              <p><strong>Documento:</strong> ${loan.usuario_documento || 'N/A'}</p>
+              <p><strong>Fecha de Préstamo:</strong> ${this.formatDate(loan.fecha_prestamo)}</p>
+              ${loan.fecha_vencimiento ? `<p><strong>Devolución Estimada:</strong> ${this.formatDate(loan.fecha_vencimiento)}</p>` : ''}
             </div>
             <button class="btn-return" onclick="dashboard.openReturnForm('${loan.id}')">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-              </svg>
+              <i class="bi bi-arrow-return-left"></i>
               Devolver
             </button>
           </div>
         `).join('')}
+      </div>
+    `;
+  }
+
+  renderLoanHistory(): void {
+    const container = document.getElementById('loanHistoryList');
+    if (!container || !this.isAdmin()) return;
+
+    const sortedHistory = [...this.loans].sort((a: any, b: any) => {
+      const fechaA = new Date(a.fecha_devolucion || a.fecha_prestamo || 0).getTime();
+      const fechaB = new Date(b.fecha_devolucion || b.fecha_prestamo || 0).getTime();
+      return fechaB - fechaA;
+    });
+
+    if (sortedHistory.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/>
+          </svg>
+          <h3>Sin historial de movimientos</h3>
+          <p>Aún no hay préstamos ni devoluciones registradas</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="history-list">
+        <div class="loans-header">Historial de Préstamos y Devoluciones (${sortedHistory.length})</div>
+        ${sortedHistory.map((loan: any) => {
+          const isActive = loan.estado === 'enuso';
+          const movementLabel = isActive ? 'Préstamo Activo' : 'Devuelto';
+          const movementClass = isActive ? 'history-active' : 'history-returned';
+          const movementDate = isActive
+            ? this.formatDate(loan.fecha_prestamo)
+            : this.formatDate(loan.fecha_devolucion || loan.fecha_prestamo);
+
+          return `
+            <div class="loan-item history-item-row">
+              <div class="loan-details">
+                <h4>${loan.instrumento_nombre || 'Instrumento'} <span style="color: #6B7280; font-weight: normal;">(${loan.instrumento_referencia || 'N/A'})</span></h4>
+                <p><strong>Usuario:</strong> ${loan.usuario_nombre || 'N/A'} - <strong>Documento:</strong> ${loan.usuario_documento || 'N/A'}</p>
+                <p><strong>Fecha préstamo:</strong> ${this.formatDate(loan.fecha_prestamo)}</p>
+                ${loan.fecha_devolucion ? `<p><strong>Fecha devolución:</strong> ${this.formatDate(loan.fecha_devolucion)}</p>` : ''}
+              </div>
+              <span class="history-status ${movementClass}">${movementLabel} · ${movementDate}</span>
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
   }
@@ -443,19 +530,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
     tabs.forEach(t => t.classList.remove('active'));
     (event?.target as HTMLElement)?.classList.add('active');
 
+    const instContent = document.getElementById('instrumentsContent');
+    const loansContent = document.getElementById('loansContent');
+    const historyContent = document.getElementById('historyContent');
+    const searchSection = document.getElementById('instrumentsSearch');
+
     if (tab === 'instruments') {
-      const instContent = document.getElementById('instrumentsContent');
-      const loansContent = document.getElementById('loansContent');
-      const searchSection = document.getElementById('instrumentsSearch');
       if (instContent) instContent.classList.remove('hidden');
       if (loansContent) loansContent.classList.add('hidden');
+      if (historyContent) historyContent.classList.add('hidden');
       if (searchSection) (searchSection as HTMLElement).style.display = 'block';
-    } else {
-      const instContent = document.getElementById('instrumentsContent');
-      const loansContent = document.getElementById('loansContent');
-      const searchSection = document.getElementById('instrumentsSearch');
+    } else if (tab === 'loans') {
       if (instContent) instContent.classList.add('hidden');
       if (loansContent) loansContent.classList.remove('hidden');
+      if (historyContent) historyContent.classList.add('hidden');
+      if (searchSection) (searchSection as HTMLElement).style.display = 'none';
+    } else {
+      if (instContent) instContent.classList.add('hidden');
+      if (loansContent) loansContent.classList.add('hidden');
+      if (historyContent) historyContent.classList.remove('hidden');
       if (searchSection) (searchSection as HTMLElement).style.display = 'none';
     }
   }
@@ -489,13 +582,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const condicion = filterCondicion?.value || '';
 
     const filtered = this.instruments.filter((inst: any) => {
+      const referencia = (inst.referencia || inst.codigo || '').toString().toLowerCase();
+      const numeroSerie = (inst.numero_serie || inst.numeroSerie || '').toString().toLowerCase();
+      const marca = (inst.marca || '').toString().toLowerCase();
+      const nombre = (inst.nombre || '').toString().toLowerCase();
+      const categoriaNombre = (inst.categoria_nombre || inst.categoria || '').toString();
       const matchesSearch = 
-        inst.nombre.toLowerCase().includes(search) ||
-        inst.codigo.toLowerCase().includes(search) ||
-        inst.marca.toLowerCase().includes(search) ||
-        inst.numeroSerie.toLowerCase().includes(search);
+        nombre.includes(search) ||
+        referencia.includes(search) ||
+        marca.includes(search) ||
+        numeroSerie.includes(search);
       
-      return matchesSearch && (!categoria || inst.categoria === categoria) && 
+      return matchesSearch && (!categoria || categoriaNombre === categoria) && 
              (!estado || inst.estado === estado) && (!condicion || inst.condicion === condicion);
     });
     
@@ -520,7 +618,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   exportCSV(): void {
     const headers = ['Código', 'Nombre', 'Categoría', 'Marca', 'Modelo', 'No. Serie', 'Estado', 'Condición', 'Ubicación'];
-    const rows = this.instruments.map((i: any) => [i.codigo, i.nombre, i.categoria, i.marca, i.modelo, i.numeroSerie, i.estado, i.condicion, i.ubicacion]);
+    const rows = this.instruments.map((i: any) => [
+      i.referencia || i.codigo || '',
+      i.nombre || '',
+      i.categoria_nombre || i.categoria || '',
+      i.marca || '',
+      i.modelo || '',
+      i.numero_serie || i.numeroSerie || '',
+      this.getEstadoLabel(i.estado),
+      i.condicion || '',
+      i.ubicacion_fisica || i.ubicacion || ''
+    ]);
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -530,14 +638,69 @@ export class DashboardComponent implements OnInit, OnDestroy {
     a.click();
   }
 
+  openHistoryModal(id: string): void {
+    if (!this.isAdmin()) {
+      this.showAlert('error', 'Acceso Denegado', 'Solo administrador puede ver el historial.');
+      return;
+    }
+
+    const instrumentId = parseInt(id, 10);
+    const instrumento = this.instruments.find(i => Number(i.id) === instrumentId);
+
+    this.historialInstrumentoNombre = instrumento?.nombre || `Instrumento #${id}`;
+    this.historialMovimientos = [];
+    this.historialLoading = true;
+
+    const modal = document.getElementById('historyModal');
+    if (modal) {
+      modal.classList.add('active');
+    }
+
+    this.instrumentoService.obtenerHistorial(instrumentId).subscribe({
+      next: (historial: any) => {
+        this.historialMovimientos = Array.isArray(historial) ? historial : [];
+        this.historialLoading = false;
+      },
+      error: (err) => {
+        console.error('Error cargando historial:', err);
+        this.historialLoading = false;
+        this.showAlert('error', 'Error', 'No se pudo cargar el historial del instrumento.');
+      }
+    });
+  }
+
+  closeHistoryModal(): void {
+    const modal = document.getElementById('historyModal');
+    if (modal) {
+      modal.classList.remove('active');
+    }
+    this.historialMovimientos = [];
+    this.historialInstrumentoNombre = '';
+    this.historialLoading = false;
+  }
+
+  formatearFecha(fecha?: string): string {
+    if (!fecha) return '';
+    return new Date(fecha).toLocaleString('es-CO');
+  }
+
   openInstrumentForm(): void {
     // ✅ Validar permiso: solo administrador puede crear instrumentos
-    if (this.currentUser?.rol !== 'administrador') {
+    if (!this.isAdmin()) {
       this.showAlert('error', 'Acceso Denegado', 'Solo administrador puede crear instrumentos');
       return;
     }
 
     this.editingInstrumentId = null;
+    const categorySelect = document.getElementById('instrumentCategorySelect') as HTMLSelectElement;
+
+    if (categorySelect) {
+      const categoriasOptions = this.categorias
+        .map((cat: any) => `<option value="${cat.id}">${cat.nombre}</option>`)
+        .join('');
+      categorySelect.innerHTML = `<option value="">Seleccione categoría</option>${categoriasOptions}`;
+    }
+
     const title = document.getElementById('instrumentModalTitle');
     const modal = document.getElementById('instrumentModal');
     if (title) title.textContent = 'Registrar Nuevo Instrumento';
@@ -565,48 +728,67 @@ export class DashboardComponent implements OnInit, OnDestroy {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
-    const instrument: any = {
-      codigo: formData.get('codigo'),
-      nombre: formData.get('nombre'),
-      categoria: formData.get('categoria'),
-      marca: formData.get('marca'),
-      modelo: formData.get('modelo'),
-      numeroSerie: formData.get('numeroSerie'),
-      fechaAdquisicion: formData.get('fechaAdquisicion'),
-      valorAdquisicion: parseInt(formData.get('valorAdquisicion') as string) || 0,
-      estado: formData.get('estado'),
-      condicion: formData.get('condicion'),
-      ubicacion: formData.get('ubicacion'),
-      observaciones: formData.get('observaciones') || ''
+    const referencia = (formData.get('codigo') as string || '').trim();
+    const categoriaId = Number(formData.get('categoria'));
+    const payload: any = {
+      referencia,
+      nombre: (formData.get('nombre') as string || '').trim(),
+      categoria: categoriaId,
+      marca: (formData.get('marca') as string || '').trim() || null,
+      modelo: (formData.get('modelo') as string || '').trim() || null,
+      fecha_adquisicion: (formData.get('fechaAdquisicion') as string) || null,
+      cantidad: Number(formData.get('cantidad')) || 1
     };
+
+    if (!payload.nombre || !payload.referencia || !payload.categoria) {
+      this.showAlert('error', 'Campos requeridos', 'Nombre, código y categoría son obligatorios.');
+      return;
+    }
 
     if (this.editingInstrumentId) {
       // Actualizar instrumento existente
-      this.instrumentoService.actualizarInstrumento(parseInt(this.editingInstrumentId), instrument).subscribe({
+      this.instrumentoService.actualizarInstrumento(parseInt(this.editingInstrumentId), payload).subscribe({
         next: (response) => {
           this.showAlert('success', 'Éxito', 'Instrumento actualizado correctamente');
           this.loadData();
+          form.reset();
           this.closeInstrumentForm();
         },
         error: (err) => {
           console.error('Error actualizando instrumento:', err);
-          this.showAlert('error', 'Error', 'No se pudo actualizar el instrumento');
+          this.showAlert('error', 'Error', this.getApiErrorMessage(err, 'No se pudo actualizar el instrumento'));
         }
       });
     } else {
       // Crear nuevo instrumento
-      this.instrumentoService.crearInstrumento(instrument).subscribe({
+      this.instrumentoService.crearInstrumento(payload).subscribe({
         next: (response) => {
           this.showAlert('success', 'Éxito', 'Instrumento registrado correctamente');
           this.loadData();
+          form.reset();
           this.closeInstrumentForm();
         },
         error: (err) => {
           console.error('Error creando instrumento:', err);
-          this.showAlert('error', 'Error', 'No se pudo registrar el instrumento');
+          this.showAlert('error', 'Error', this.getApiErrorMessage(err, 'No se pudo registrar el instrumento'));
         }
       });
     }
+  }
+
+  private getApiErrorMessage(err: any, fallback: string): string {
+    const apiError = err?.error;
+
+    if (!apiError) return fallback;
+    if (typeof apiError === 'string') return apiError;
+
+    const entries = Object.entries(apiError)
+      .map(([key, value]) => {
+        const valueText = Array.isArray(value) ? value.join(', ') : String(value);
+        return `${key}: ${valueText}`;
+      });
+
+    return entries.length ? entries.join(' | ') : fallback;
   }
 
   deleteInstrument(id: string): void {
@@ -626,43 +808,147 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   openLoanForm(): void {
     const select = document.getElementById('loanInstrumentSelect') as HTMLSelectElement;
-    const available = this.instruments.filter(i => i.estado === 'Disponible');
-    if (select) select.innerHTML = '<option>Seleccione instrumento</option>' + available.map(i => `<option value="${i.id}">${i.nombre} (${i.codigo})</option>`).join('');
+    const available = this.instruments.filter(i => i.estado === 'disponible');
+    if (select) select.innerHTML = '<option>Seleccione instrumento</option>' + available.map(i => `<option value="${i.id}">${i.nombre} (${i.referencia || i.codigo || 'N/A'})</option>`).join('');
+    this.clearLoanModalError();
     const modal = document.getElementById('loanModal');
     if (modal) modal.classList.add('active');
+  }
+
+  openDarBajaModal(instrumentId: string): void {
+    if (!this.isAdmin()) {
+      this.showAlert('error', 'Acceso Denegado', 'Solo administrador puede dar de baja instrumentos.');
+      return;
+    }
+
+    const idNum = parseInt(instrumentId, 10);
+    this.instrumentoParaBaja = this.instruments.find(i => Number(i.id) === idNum);
+
+    const modal = document.getElementById('darBajaModal');
+    if (modal) modal.classList.add('active');
+  }
+
+  closeDarBajaModal(): void {
+    const modal = document.getElementById('darBajaModal');
+    if (modal) modal.classList.remove('active');
+    this.instrumentoParaBaja = null;
+  }
+
+  submitDarBaja(event: Event): void {
+    event.preventDefault();
+
+    if (!this.instrumentoParaBaja) return;
+
+    const form = event.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const observacion = (formData.get('observacion') as string) || 'Instrumento dado de baja por administrador';
+
+    this.instrumentoService.darDeBaja(Number(this.instrumentoParaBaja.id), observacion).subscribe({
+      next: () => {
+        this.showAlert('success', 'Éxito', 'Instrumento dado de baja correctamente.');
+        this.closeDarBajaModal();
+        this.loadData();
+      },
+      error: (err) => {
+        console.error('Error al dar de baja:', err);
+        this.showAlert('error', 'Error', err.error?.error || 'No se pudo dar de baja el instrumento.');
+      }
+    });
   }
 
   closeLoanForm(): void {
     const modal = document.getElementById('loanModal');
     if (modal) modal.classList.remove('active');
+    this.clearLoanModalError();
   }
 
   saveLoan(event: Event): void {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
-    const instrumentId = formData.get('instrumentoId') as string;
+    const instrumentId = Number(formData.get('instrumentoId'));
+    const estudianteNombre = String(formData.get('estudianteNombre') || '').trim();
+    const estudianteDocumento = String(formData.get('estudianteIdentificacion') || '').trim();
+    const fechaPrestamo = String(formData.get('fechaPrestamo') || '').trim();
+    const fechaVencimiento = String(formData.get('fechaDevolucionEstimada') || '').trim();
+    const observaciones = String(formData.get('observaciones') || '').trim();
 
-    const loan: any = {
-      instrumento: parseInt(instrumentId),
-      estudianteNombre: formData.get('estudianteNombre'),
-      estudianteIdentificacion: formData.get('estudianteIdentificacion'),
-      fechaPrestamo: formData.get('fechaPrestamo'),
-      fechaDevolucionEstimada: formData.get('fechaDevolucionEstimada') || null,
-      observaciones: formData.get('observaciones') || ''
-    };
+    this.clearLoanModalError();
 
-    this.prestamoService.crearPrestamo(loan).subscribe({
-      next: (response) => {
-        this.showAlert('success', 'Éxito', 'Préstamo registrado correctamente');
-        this.loadData();
-        this.closeLoanForm();
+    if (!instrumentId || !estudianteNombre || !estudianteDocumento || !fechaPrestamo) {
+      this.showLoanModalError('Completa los campos obligatorios para registrar el préstamo.');
+      return;
+    }
+
+    this.prestamoService.getUsuarios(estudianteDocumento).subscribe({
+      next: (data: any) => {
+        const usuarios = Array.isArray(data) ? data : data?.results || [];
+        const existente = usuarios.find((u: any) => String(u.documento) === estudianteDocumento);
+
+        const crearPrestamoConUsuario = (usuarioId: number) => {
+          const loanPayload: any = {
+            instrumento: instrumentId,
+            usuario: usuarioId,
+            fecha_prestamo: fechaPrestamo,
+            fecha_vencimiento: fechaVencimiento || null,
+            estado: 'enuso',
+            observaciones
+          };
+
+          this.prestamoService.crearPrestamo(loanPayload).subscribe({
+            next: () => {
+              this.showAlert('success', 'Éxito', 'Préstamo registrado correctamente');
+              form.reset();
+              this.loadData();
+              this.closeLoanForm();
+            },
+            error: (err) => {
+              console.error('Error creando préstamo:', err);
+              this.showLoanModalError(this.getApiErrorMessage(err, 'No se pudo registrar el préstamo.'));
+            }
+          });
+        };
+
+        if (existente?.id) {
+          crearPrestamoConUsuario(Number(existente.id));
+          return;
+        }
+
+        this.prestamoService.crearUsuario({
+          nombre: estudianteNombre,
+          documento: estudianteDocumento,
+          tipo: 'estudiante'
+        } as any).subscribe({
+          next: (nuevoUsuario: any) => {
+            crearPrestamoConUsuario(Number(nuevoUsuario.id));
+          },
+          error: (err) => {
+            console.error('Error creando usuario para préstamo:', err);
+            this.showLoanModalError(this.getApiErrorMessage(err, 'No se pudo crear el usuario del préstamo.'));
+          }
+        });
       },
       error: (err) => {
-        console.error('Error creando préstamo:', err);
-        this.showAlert('error', 'Error', 'No se pudo registrar el préstamo');
+        console.error('Error buscando usuario para préstamo:', err);
+        this.showLoanModalError(this.getApiErrorMessage(err, 'No se pudo validar el usuario del préstamo.'));
       }
     });
+  }
+
+  private showLoanModalError(message: string): void {
+    const loanModalError = document.getElementById('loanModalError');
+    if (!loanModalError) return;
+
+    loanModalError.textContent = message;
+    loanModalError.classList.add('active');
+  }
+
+  private clearLoanModalError(): void {
+    const loanModalError = document.getElementById('loanModalError');
+    if (!loanModalError) return;
+
+    loanModalError.textContent = '';
+    loanModalError.classList.remove('active');
   }
 
   openReturnForm(loanId: string): void {
@@ -674,11 +960,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
       returnInfo.innerHTML = `
         <h3>Préstamo Activo</h3>
         <p><strong>Instrumento:</strong> ${loan.instrumento_nombre || loan.instrumentoNombre}</p>
-        <p><strong>Estudiante:</strong> ${loan.estudianteNombre}</p>
+        <p><strong>Usuario:</strong> ${loan.usuario_nombre || loan.estudianteNombre || 'N/A'}</p>
       `;
     }
     const modal = document.getElementById('returnModal');
     if (modal) modal.classList.add('active');
+  }
+
+  returnInstrumentFromCard(instrumentId: string): void {
+    const idNum = parseInt(instrumentId, 10);
+    const activeLoan = this.loans.find((l: any) => Number(l.instrumento) === idNum && l.estado === 'enuso');
+
+    if (!activeLoan) {
+      this.showAlert('warning', 'Sin préstamo activo', 'No se encontró un préstamo activo para este instrumento.');
+      return;
+    }
+
+    this.openReturnForm(String(activeLoan.id));
   }
 
   closeReturnForm(): void {
@@ -693,8 +991,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
     const loanId = this.returningLoan.id || this.returningLoan.pk;
+    const observacion = (formData.get('observaciones') as string) || undefined;
 
-    this.prestamoService.devolverPrestamo(parseInt(loanId as string)).subscribe({
+    this.prestamoService.devolverPrestamo(parseInt(loanId as string), observacion).subscribe({
       next: (response) => {
         this.showAlert('success', 'Éxito', 'Préstamo devuelto correctamente');
         this.loadData();
@@ -726,7 +1025,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const report = {
       fecha: new Date().toISOString(),
       total_instrumentos: this.instruments.length,
-      prestamos_activos: this.loans.filter(l => l.estado === 'Activo').length
+      prestamos_activos: this.loans.filter(l => l.estado === 'enuso').length
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -739,6 +1038,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
   formatDate(dateStr: string): string {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('es-CO');
+  }
+
+  private getEstadoLabel(estado: string): string {
+    const labels: Record<string, string> = {
+      disponible: 'Disponible',
+      prestado: 'En Uso',
+      mantenimiento: 'En Reparación',
+      baja: 'Fuera de Servicio'
+    };
+
+    return labels[estado] || estado;
+  }
+
+  isAdmin(): boolean {
+    return this.getNormalizedRole() === 'administrador';
+  }
+
+  isStorekeeper(): boolean {
+    return this.getNormalizedRole() === 'almacenista';
+  }
+
+  private getNormalizedRole(): string {
+    return (this.currentUser?.rol || '').toString().trim().toLowerCase();
+  }
+
+  private getBadgeClass(estado: string): string {
+    const classes: Record<string, string> = {
+      disponible: 'badge-available',
+      prestado: 'badge-in-use',
+      mantenimiento: 'badge-repair',
+      baja: 'badge-out-of-service'
+    };
+
+    return classes[estado] || 'badge-available';
   }
 
   logout(): void {
