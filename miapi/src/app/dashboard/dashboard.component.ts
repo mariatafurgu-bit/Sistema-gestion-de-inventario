@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { CommonModule  } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 import { InstrumentoService } from '../services/instrumento.service';
@@ -14,7 +15,7 @@ declare global {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.css'],
   encapsulation: ViewEncapsulation.None
@@ -26,6 +27,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   historialLoading: boolean = false;
   instrumentoParaBaja: any = null;
   categorias: any[] = [];
+  instrumentForm = this.getEmptyInstrumentForm();
   
   // Data Storage
   instruments: any[] = [];
@@ -51,7 +53,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     window.dashboard = this;
 
-    // ✅ Obtener usuario desde el servidor (valida sesión)
+    // Validate session on load; redirects if session is invalid.
     this.authService.obtenerUsuarioActual().subscribe({
       next: (userData) => {
         this.currentUser = userData;
@@ -247,7 +249,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     activeLoans.forEach((loan: any) => {
       if (!loan.fecha_vencimiento) return;
       
-      const dueDate = new Date(loan.fecha_vencimiento);
+      const dueDate = this.parseDateOnly(loan.fecha_vencimiento);
       dueDate.setHours(0, 0, 0, 0);
       
       const instrumentName = loan.instrumento_nombre || 'Instrumento';
@@ -333,11 +335,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const badgeClass = this.getBadgeClass(inst.estado);
       const estadoLabel = this.getEstadoLabel(inst.estado);
       const referencia = inst.referencia || inst.codigo || 'N/A';
+      const categoria = inst.categoria_nombre || this.getCategoriaNombre(inst.categoria) || 'Sin categoría';
+      const ubicacion = inst.ubicacion_fisica || 'Sin ubicación';
+      const valorReemplazo = inst.valor_reemplazo;
+      const fechaAdquisicion = inst.fecha_adquisicion ? this.formatDate(inst.fecha_adquisicion) : 'Sin fecha';
       const numeroSerie = inst.numero_serie || inst.numeroSerie || 'N/A';
-      const categoria = inst.categoria_nombre || inst.categoria || 'Sin categoría';
-      const ubicacion = inst.ubicacion_fisica || inst.ubicacion || 'Sin ubicación';
 
-      const conditionColors: any = {
+      const conditionColors: Record<string, string> = {
         'Excelente': '#16A34A',
         'Buena': '#2563EB',
         'Regular': '#CA8A04',
@@ -384,12 +388,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
               <p class="detail-value">${inst.marca || ''} ${inst.modelo || ''}</p>
             </div>
             <div class="detail-item">
+              <p class="detail-label">Cantidad</p>
+              <p class="detail-value">${inst.cantidad ?? 1}</p>
+            </div>
+            <div class="detail-item">
               <p class="detail-label">No. Serie</p>
               <p class="detail-value">${numeroSerie}</p>
             </div>
             <div class="detail-item">
               <p class="detail-label">Condición</p>
               <p class="detail-value" style="color: ${conditionColors[inst.condicion] || '#374151'}">${inst.condicion || 'Sin dato'}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-label">Valor de reemplazo</p>
+              <p class="detail-value">${valorReemplazo ?? 'Sin dato'}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-label">Fecha de adquisición</p>
+              <p class="detail-value">${fechaAdquisicion}</p>
             </div>
           </div>
 
@@ -398,12 +414,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
               <i class="bi bi-geo-alt"></i>
               <span>${ubicacion}</span>
             </div>
-            ${inst.responsable ? `
-              <div class="info-row">
-                <i class="bi bi-person"></i>
-                <span>${inst.responsable}</span>
-              </div>
-            ` : ''}
           </div>
 
           ${inst.observaciones ? `
@@ -471,8 +481,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!container || !this.isAdmin()) return;
 
     const sortedHistory = [...this.loans].sort((a: any, b: any) => {
-      const fechaA = new Date(a.fecha_devolucion || a.fecha_prestamo || 0).getTime();
-      const fechaB = new Date(b.fecha_devolucion || b.fecha_prestamo || 0).getTime();
+      const fechaA = this.parseDateOnly(a.fecha_devolucion || a.fecha_prestamo || '').getTime();
+      const fechaB = this.parseDateOnly(b.fecha_devolucion || b.fecha_prestamo || '').getTime();
       return fechaB - fechaA;
     });
 
@@ -617,6 +627,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   exportCSV(): void {
+    // Client-side export for the current instrument list.
     const headers = ['Código', 'Nombre', 'Categoría', 'Marca', 'Modelo', 'No. Serie', 'Estado', 'Condición', 'Ubicación'];
     const rows = this.instruments.map((i: any) => [
       i.referencia || i.codigo || '',
@@ -629,8 +640,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
       i.condicion || '',
       i.ubicacion_fisica || i.ubicacion || ''
     ]);
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const delimiter = ';';
+    const escapeCell = (value: unknown): string => {
+      const text = String(value ?? '').replace(/\r?\n/g, ' ');
+      const escaped = text.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+    const csv = [headers, ...rows]
+      .map(row => row.map(escapeCell).join(delimiter))
+      .join('\n');
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -692,31 +712,47 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     this.editingInstrumentId = null;
-    const categorySelect = document.getElementById('instrumentCategorySelect') as HTMLSelectElement;
-
-    if (categorySelect) {
-      const categoriasOptions = this.categorias
-        .map((cat: any) => `<option value="${cat.id}">${cat.nombre}</option>`)
-        .join('');
-      categorySelect.innerHTML = `<option value="">Seleccione categoría</option>${categoriasOptions}`;
-    }
+    this.instrumentForm = this.getEmptyInstrumentForm();
 
     const title = document.getElementById('instrumentModalTitle');
     const modal = document.getElementById('instrumentModal');
     if (title) title.textContent = 'Registrar Nuevo Instrumento';
-    if (modal) modal.classList.add('active');
+    this.cdr.detectChanges();
+    if (modal) {
+      setTimeout(() => modal.classList.add('active'), 0);
+    }
   }
 
   editInstrument(id: string): void {
     this.editingInstrumentId = id;
-    const idNum = parseInt(id);
-    const inst = this.instruments.find(i => i.id === idNum || i.id === parseInt(i.id.toString()));
-    if (!inst) return;
+    const idNum = Number(id);
+    const inst = this.instruments.find(i => Number(i.id) === idNum);
+    if (!inst) {
+      this.showAlert('error', 'Instrumento no encontrado', 'No se pudo cargar el instrumento seleccionado.');
+      return;
+    }
     const title = document.getElementById('instrumentModalTitle');
     if (title) title.textContent = 'Editar Instrumento';
-    // Pre-populate form fields here if needed
+    this.instrumentForm = {
+      codigo: inst.referencia || inst.codigo || '',
+      nombre: inst.nombre || '',
+      categoria: inst.categoria || '',
+      marca: inst.marca || '',
+      modelo: inst.modelo || '',
+      numeroSerie: inst.numero_serie || inst.numeroSerie || '',
+      fechaAdquisicion: inst.fecha_adquisicion || '',
+      valorAdquisicion: inst.valor_reemplazo ?? null,
+      estado: inst.estado || 'disponible',
+      condicion: inst.condicion || '',
+      cantidad: inst.cantidad ?? 1,
+      ubicacion: inst.ubicacion_fisica || inst.ubicacion || '',
+      observaciones: inst.observaciones || ''
+    };
     const modal = document.getElementById('instrumentModal');
-    if (modal) modal.classList.add('active');
+    this.cdr.detectChanges();
+    if (modal) {
+      setTimeout(() => modal.classList.add('active'), 0);
+    }
   }
 
   closeInstrumentForm(): void {
@@ -726,18 +762,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   saveInstrument(event: Event): void {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
-    const formData = new FormData(form);
-    const referencia = (formData.get('codigo') as string || '').trim();
-    const categoriaId = Number(formData.get('categoria'));
+    const referencia = this.instrumentForm.codigo.trim();
+    const categoriaId = Number(this.instrumentForm.categoria);
+    const ubicacion = this.instrumentForm.ubicacion.trim();
+    const valorReemplazoRaw = this.instrumentForm.valorAdquisicion;
+    const valorReemplazo = valorReemplazoRaw === '' || valorReemplazoRaw === null || valorReemplazoRaw === undefined
+      ? null
+      : Number(valorReemplazoRaw);
+    const cantidadRaw = Number(this.instrumentForm.cantidad);
+    const cantidad = Number.isFinite(cantidadRaw) && cantidadRaw > 0 ? cantidadRaw : 1;
+    const estado = (this.instrumentForm.estado || 'disponible').trim();
+    const condicion = (this.instrumentForm.condicion || '').trim();
+    const numeroSerie = (this.instrumentForm.numeroSerie || '').trim();
+    const observaciones = (this.instrumentForm.observaciones || '').trim();
     const payload: any = {
       referencia,
-      nombre: (formData.get('nombre') as string || '').trim(),
+      nombre: this.instrumentForm.nombre.trim(),
       categoria: categoriaId,
-      marca: (formData.get('marca') as string || '').trim() || null,
-      modelo: (formData.get('modelo') as string || '').trim() || null,
-      fecha_adquisicion: (formData.get('fechaAdquisicion') as string) || null,
-      cantidad: Number(formData.get('cantidad')) || 1
+      marca: this.instrumentForm.marca.trim() || null,
+      modelo: this.instrumentForm.modelo.trim() || null,
+      fecha_adquisicion: this.instrumentForm.fechaAdquisicion || null,
+      cantidad,
+      ubicacion_fisica: ubicacion || null,
+      valor_reemplazo: Number.isFinite(valorReemplazo as number) ? valorReemplazo : null,
+      estado,
+      condicion: condicion || null,
+      numero_serie: numeroSerie || null,
+      observaciones: observaciones || null
     };
 
     if (!payload.nombre || !payload.referencia || !payload.categoria) {
@@ -751,7 +802,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: (response) => {
           this.showAlert('success', 'Éxito', 'Instrumento actualizado correctamente');
           this.loadData();
-          form.reset();
           this.closeInstrumentForm();
         },
         error: (err) => {
@@ -765,7 +815,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: (response) => {
           this.showAlert('success', 'Éxito', 'Instrumento registrado correctamente');
           this.loadData();
-          form.reset();
           this.closeInstrumentForm();
         },
         error: (err) => {
@@ -958,9 +1007,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const returnInfo = document.getElementById('returnLoanInfo');
     if (returnInfo) {
       returnInfo.innerHTML = `
-        <h3>Préstamo Activo</h3>
-        <p><strong>Instrumento:</strong> ${loan.instrumento_nombre || loan.instrumentoNombre}</p>
-        <p><strong>Usuario:</strong> ${loan.usuario_nombre || loan.estudianteNombre || 'N/A'}</p>
+        <div class="return-card">
+          <div class="return-card-header">
+            <div>
+              <p class="return-card-title">Préstamo activo</p>
+              <p class="return-card-subtitle">Confirma la devolución del instrumento</p>
+            </div>
+            <span class="return-chip">${loan.estado === 'enuso' ? 'En uso' : loan.estado || 'Estado'}</span>
+          </div>
+          <div class="return-card-body">
+            <div class="return-row">
+              <span class="return-label">Instrumento</span>
+              <span class="return-value">${loan.instrumento_nombre || loan.instrumentoNombre || 'Instrumento'}</span>
+            </div>
+            <div class="return-row">
+              <span class="return-label">Usuario</span>
+              <span class="return-value">${loan.usuario_nombre || loan.estudianteNombre || 'N/A'}</span>
+            </div>
+            <div class="return-row">
+              <span class="return-label">Referencia</span>
+              <span class="return-value">${loan.instrumento_referencia || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
       `;
     }
     const modal = document.getElementById('returnModal');
@@ -1022,10 +1091,67 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   exportReportJSON(): void {
+    const categorias = Array.from(
+      new Set(
+        this.instruments
+          .map((i: any) => i.categoria_nombre || i.categoria || '')
+          .filter((value: string) => value && value.trim())
+      )
+    );
+
+    const usuariosMap = new Map<string, any>();
+    this.loans.forEach((l: any) => {
+      const id = (l.usuario ?? '').toString();
+      if (!id || usuariosMap.has(id)) return;
+      usuariosMap.set(id, {
+        id: l.usuario || null,
+        nombre: l.usuario_nombre || '',
+        documento: l.usuario_documento || ''
+      });
+    });
+    const usuarios = Array.from(usuariosMap.values());
+
+    const instrumentos = this.instruments.map((i: any) => ({
+      id: i.id ?? null,
+      referencia: i.referencia || i.codigo || '',
+      nombre: i.nombre || '',
+      categoria: i.categoria_nombre || i.categoria || '',
+      marca: i.marca || '',
+      modelo: i.modelo || '',
+      numero_serie: i.numero_serie || i.numeroSerie || '',
+      estado: this.getEstadoLabel(i.estado),
+      condicion: i.condicion || '',
+      ubicacion: i.ubicacion_fisica || i.ubicacion || '',
+      cantidad: i.cantidad ?? 1,
+      fecha_adquisicion: i.fecha_adquisicion || null,
+      valor_reemplazo: i.valor_reemplazo ?? null
+    }));
+
+    const prestamos = this.loans.map((l: any) => ({
+      id: l.id ?? l.pk ?? null,
+      instrumento_id: l.instrumento || null,
+      instrumento_nombre: l.instrumento_nombre || '',
+      instrumento_referencia: l.instrumento_referencia || '',
+      usuario_id: l.usuario || null,
+      usuario_nombre: l.usuario_nombre || '',
+      usuario_documento: l.usuario_documento || '',
+      estado: l.estado || '',
+      fecha_prestamo: l.fecha_prestamo || null,
+      fecha_vencimiento: l.fecha_vencimiento || null,
+      fecha_devolucion: l.fecha_devolucion || null,
+      dias_permitidos: l.dias_permitidos ?? null
+    }));
+
     const report = {
       fecha: new Date().toISOString(),
       total_instrumentos: this.instruments.length,
-      prestamos_activos: this.loans.filter(l => l.estado === 'enuso').length
+      prestamos_activos: this.loans.filter(l => l.estado === 'enuso').length,
+      categorias,
+      total_categorias: categorias.length,
+      usuarios,
+      total_usuarios: usuarios.length,
+      instrumentos,
+      prestamos
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1037,7 +1163,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   formatDate(dateStr: string): string {
     if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('es-CO');
+    if (dateStr.includes('T')) {
+      return new Date(dateStr).toLocaleDateString('es-CO');
+    }
+
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  }
+
+  private parseDateOnly(dateStr: string): Date {
+    if (!dateStr) return new Date(0);
+    if (dateStr.includes('T')) return new Date(dateStr);
+    return new Date(`${dateStr}T00:00:00`);
   }
 
   private getEstadoLabel(estado: string): string {
@@ -1072,6 +1211,45 @@ export class DashboardComponent implements OnInit, OnDestroy {
     };
 
     return classes[estado] || 'badge-available';
+  }
+
+  private getEmptyInstrumentForm(): {
+    codigo: string;
+    nombre: string;
+    categoria: string | number;
+    marca: string;
+    modelo: string;
+    numeroSerie: string;
+    fechaAdquisicion: string;
+    valorAdquisicion: number | string | null;
+    estado: string;
+    condicion: string;
+    cantidad: number;
+    ubicacion: string;
+    observaciones: string;
+  } {
+    return {
+      codigo: '',
+      nombre: '',
+      categoria: '',
+      marca: '',
+      modelo: '',
+      numeroSerie: '',
+      fechaAdquisicion: '',
+      valorAdquisicion: null,
+      estado: 'disponible',
+      condicion: '',
+      cantidad: 1,
+      ubicacion: '',
+      observaciones: ''
+    };
+  }
+
+  private getCategoriaNombre(categoriaId: number | string | undefined): string | null {
+    if (!categoriaId) return null;
+    const idNumber = Number(categoriaId);
+    const categoria = this.categorias.find(cat => Number(cat.id) === idNumber);
+    return categoria?.nombre || null;
   }
 
   logout(): void {

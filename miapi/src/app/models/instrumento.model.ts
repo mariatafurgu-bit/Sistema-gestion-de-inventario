@@ -5,20 +5,21 @@ export interface Instrumento {
   referencia: string;
   categoria: string | number;
   categoria_nombre?: string;
-  marca?: string;
-  modelo?: string;
-  fecha_adquisicion?: string;
+  marca?: string | null;
+  modelo?: string | null;
+  numero_serie?: string | null;
+  fecha_adquisicion?: string | null;
   estado: 'disponible' | 'prestado' | 'mantenimiento' | 'baja';
-  valor_reemplazo?: number;
-  ubicacion_fisica?: string;
+  valor_reemplazo?: number | null;
+  ubicacion_fisica?: string | null;
   cantidad?: number;
   fecha_creacion?: string;
   fecha_actualizacion?: string;
-  observaciones?: string;
+  observaciones?: string | null;
   // Para compatibilidad con el JS anterior
   codigo?: string;
   numeroSerie?: string;
-  condicion?: string;
+  condicion?: string | null;
   responsable?: string;
 }
 

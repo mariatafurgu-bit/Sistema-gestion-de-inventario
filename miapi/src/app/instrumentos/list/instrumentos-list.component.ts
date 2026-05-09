@@ -94,8 +94,8 @@ export class InstrumentosListComponent implements OnInit {
     const colores: { [key: string]: string } = {
       'disponible': 'green',
       'prestado': 'yellow',
-      'reparacion': 'red',
-      'descartado': 'gray'
+      'mantenimiento': 'red',
+      'baja': 'gray'
     };
     return colores[estado] || 'blue';
   }
@@ -170,12 +170,14 @@ export class InstrumentosListComponent implements OnInit {
       return;
     }
 
+    const payload = this.buildInstrumentoPayload();
+
     // Actualizar fecha
     this.newInstrumento.fecha_actualizacion = new Date().toISOString();
 
     if (this.editingInstrumento && this.editingInstrumento.id) {
       // Actualizar instrumento existente
-      this.instrumentoService.actualizarInstrumento(Number(this.editingInstrumento.id), this.newInstrumento).subscribe({
+      this.instrumentoService.actualizarInstrumento(Number(this.editingInstrumento.id), payload).subscribe({
         next: () => {
           this.mostrarExito('✅ Instrumento actualizado correctamente');
           this.cargarDatos();
@@ -188,7 +190,7 @@ export class InstrumentosListComponent implements OnInit {
       });
     } else {
       // Crear nuevo instrumento
-      this.instrumentoService.crearInstrumento(this.newInstrumento).subscribe({
+      this.instrumentoService.crearInstrumento(payload).subscribe({
         next: () => {
           this.mostrarExito('✅ Instrumento registrado correctamente');
           this.cargarDatos();
@@ -245,9 +247,31 @@ export class InstrumentosListComponent implements OnInit {
       estado: 'disponible',
       marca: '',
       modelo: '',
+      numero_serie: '',
+      condicion: '',
+      ubicacion_fisica: '',
+      valor_reemplazo: null,
+      fecha_adquisicion: '',
       observaciones: '',
-      valor_reemplazo: 0,
       fecha_actualizacion: new Date().toISOString()
+    };
+  }
+
+  private buildInstrumentoPayload(): Instrumento {
+    return {
+      nombre: this.newInstrumento.nombre.trim(),
+      referencia: this.newInstrumento.referencia.trim(),
+      categoria: this.newInstrumento.categoria,
+      estado: this.newInstrumento.estado || 'disponible',
+      cantidad: this.newInstrumento.cantidad || 1,
+      marca: this.newInstrumento.marca?.trim() || null,
+      modelo: this.newInstrumento.modelo?.trim() || null,
+      numero_serie: this.newInstrumento.numero_serie?.trim() || null,
+      fecha_adquisicion: this.newInstrumento.fecha_adquisicion || null,
+      condicion: this.newInstrumento.condicion || null,
+      ubicacion_fisica: this.newInstrumento.ubicacion_fisica?.trim() || null,
+      valor_reemplazo: this.newInstrumento.valor_reemplazo ?? null,
+      observaciones: this.newInstrumento.observaciones?.trim() || null
     };
   }
 

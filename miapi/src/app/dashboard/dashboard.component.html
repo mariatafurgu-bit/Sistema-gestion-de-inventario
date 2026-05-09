@@ -178,67 +178,68 @@
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Código *</label>
-                        <input type="text" name="codigo" placeholder="Ej: INS-001" required>
+                        <input type="text" name="codigo" placeholder="Ej: INS-001" [(ngModel)]="instrumentForm.codigo" required>
                     </div>
                     <div class="form-group">
                         <label>Nombre *</label>
-                        <input type="text" name="nombre" placeholder="Ej: Guitarra Acústica" required>
+                        <input type="text" name="nombre" placeholder="Ej: Guitarra Acústica" [(ngModel)]="instrumentForm.nombre" required>
                     </div>
                     <div class="form-group">
                         <label>Categoría *</label>
-                        <select id="instrumentCategorySelect" name="categoria" required>
+                        <select id="instrumentCategorySelect" name="categoria" [(ngModel)]="instrumentForm.categoria" required>
                             <option value="">Seleccione categoría</option>
+                            <option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nombre }}</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Marca</label>
-                        <input type="text" name="marca" placeholder="Ej: Yamaha">
+                        <input type="text" name="marca" placeholder="Ej: Yamaha" [(ngModel)]="instrumentForm.marca">
                     </div>
                     <div class="form-group">
                         <label>Modelo</label>
-                        <input type="text" name="modelo" placeholder="Ej: FG720S">
+                        <input type="text" name="modelo" placeholder="Ej: FG720S" [(ngModel)]="instrumentForm.modelo">
                     </div>
                     <div class="form-group">
                         <label>Número de Serie</label>
-                        <input type="text" name="numeroSerie" placeholder="Ej: ABC123456">
+                        <input type="text" name="numeroSerie" placeholder="Ej: ABC123456" [(ngModel)]="instrumentForm.numeroSerie">
                     </div>
                     <div class="form-group">
                         <label>Fecha de Adquisición</label>
-                        <input type="date" name="fechaAdquisicion">
+                        <input type="date" name="fechaAdquisicion" [(ngModel)]="instrumentForm.fechaAdquisicion">
                     </div>
                     <div class="form-group">
                         <label>Valor de Adquisición</label>
-                        <input type="number" name="valorAdquisicion" placeholder="0">
+                        <input type="number" name="valorAdquisicion" placeholder="0" [(ngModel)]="instrumentForm.valorAdquisicion">
                     </div>
                     <div class="form-group">
                         <label>Estado *</label>
-                        <select name="estado" required>
-                            <option>Disponible</option>
-                            <option>En Uso</option>
-                            <option>En Reparación</option>
-                            <option>Fuera de Servicio</option>
+                        <select name="estado" [(ngModel)]="instrumentForm.estado" required>
+                            <option value="disponible">Disponible</option>
+                            <option value="prestado">En Uso</option>
+                            <option value="mantenimiento">En Reparación</option>
+                            <option value="baja">Fuera de Servicio</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Condición *</label>
-                        <select name="condicion" required>
-                            <option>Excelente</option>
-                            <option>Buena</option>
-                            <option>Regular</option>
-                            <option>Requiere Reparación</option>
+                        <select name="condicion" [(ngModel)]="instrumentForm.condicion" required>
+                            <option value="Excelente">Excelente</option>
+                            <option value="Buena">Buena</option>
+                            <option value="Regular">Regular</option>
+                            <option value="Requiere Reparación">Requiere Reparación</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Cantidad</label>
-                        <input type="number" name="cantidad" min="1" value="1" placeholder="1">
+                        <input type="number" name="cantidad" min="1" placeholder="1" [(ngModel)]="instrumentForm.cantidad">
                     </div>
                     <div class="form-group">
                         <label>Ubicación</label>
-                        <input type="text" name="ubicacion" placeholder="Ej: Sala 201">
+                        <input type="text" name="ubicacion" placeholder="Ej: Sala 201" [(ngModel)]="instrumentForm.ubicacion">
                     </div>
                     <div class="form-group form-full">
                         <label>Observaciones</label>
-                        <textarea name="observaciones" placeholder="Notas adicionales..." rows="3"></textarea>
+                        <textarea name="observaciones" placeholder="Notas adicionales..." rows="3" [(ngModel)]="instrumentForm.observaciones"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">

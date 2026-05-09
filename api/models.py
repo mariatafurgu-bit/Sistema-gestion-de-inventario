@@ -8,6 +8,7 @@ from datetime import timedelta
 # =========================
 # CATEGORIA
 # =========================
+# Core inventory taxonomy used to group instruments.
 class Categoria(models.Model):
 
     nombre = models.CharField(max_length=100, unique=True)
@@ -29,10 +30,18 @@ class Instrumento(models.Model):
         ('baja', 'Dado de Baja'),
     ]
 
+    CONDICIONES = [
+        ('Excelente', 'Excelente'),
+        ('Buena', 'Buena'),
+        ('Regular', 'Regular'),
+        ('Requiere Reparación', 'Requiere Reparación'),
+    ]
+
     nombre = models.CharField(max_length=100)
     referencia = models.CharField(max_length=50, unique=True)
     marca = models.CharField(max_length=100, blank=True, null=True)
     modelo = models.CharField(max_length=100, blank=True, null=True)
+    numero_serie = models.CharField(max_length=100, blank=True, null=True)
     fecha_adquisicion = models.DateField(blank=True, null=True)
 
     categoria = models.ForeignKey(
@@ -46,8 +55,10 @@ class Instrumento(models.Model):
         default='disponible'
     )
     cantidad = models.PositiveIntegerField(default=1)
+    condicion = models.CharField(max_length=30, choices=CONDICIONES, blank=True, null=True)
     ubicacion_fisica = models.CharField(max_length=100, blank=True, null=True)
     valor_reemplazo = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True, null=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -55,6 +66,7 @@ class Instrumento(models.Model):
     # =========================
     # CAMBIAR ESTADO
     # =========================
+    # Centralized state change to keep audit history consistent.
     def cambiar_estado(self, nuevo_estado, usuario=None, observacion=None):
 
         estado_anterior = self.estado
@@ -74,6 +86,7 @@ class Instrumento(models.Model):
     # =========================
     # GUARDAR INSTRUMENTO
     # =========================
+    # On create, seed the history with the initial state.
     def save(self, *args, **kwargs):
 
         es_nuevo = self.pk is None
@@ -261,7 +274,7 @@ class Prestamo(models.Model):
 
         super().save(*args, **kwargs)
 
-        # SINCRONIZAR ESTADO DEL INSTRUMENTO
+        # Keep instrument state in sync with loan lifecycle.
 
         if self.estado == 'enuso':
 

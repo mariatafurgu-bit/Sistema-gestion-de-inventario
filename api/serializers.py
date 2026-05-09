@@ -6,6 +6,7 @@ from .models import Categoria, Instrumento, Usuario, Prestamo, Perfil, Historial
 # =========================
 # CATEGORIA
 # =========================
+# Serializers define the public API shape for each model.
 class CategoriaSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -41,7 +42,7 @@ class InstrumentoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Instrumento
         fields = '__all__'
-        read_only_fields = ['estado', 'fecha_creacion', 'fecha_actualizacion']
+        read_only_fields = ['fecha_creacion', 'fecha_actualizacion']
 
     def validate_referencia(self, value):
         if not value or len(value.strip()) == 0:
@@ -70,7 +71,7 @@ class InstrumentoDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Instrumento
         fields = '__all__'
-        read_only_fields = ['estado', 'fecha_creacion', 'fecha_actualizacion']
+        read_only_fields = ['fecha_creacion', 'fecha_actualizacion']
 
 
 # =========================
@@ -200,7 +201,8 @@ class ReporteVencidoSerializer(serializers.ModelSerializer):
 class ReporteEstadoInstrumentoSerializer(serializers.ModelSerializer):
 
     categoria_nombre = serializers.ReadOnlyField(source='categoria.nombre')
-    cantidad_prestamos = serializers.SerializerMethodField()
+    prestamos_activos = serializers.SerializerMethodField()
+    total_prestamos_historicos = serializers.SerializerMethodField()
     ultimo_cambio = serializers.SerializerMethodField()
 
     class Meta:
@@ -215,14 +217,18 @@ class ReporteEstadoInstrumentoSerializer(serializers.ModelSerializer):
             'modelo',
             'ubicacion_fisica',
             'cantidad',
-            'cantidad_prestamos',
+            'prestamos_activos',
+            'total_prestamos_historicos',
             'valor_reemplazo',
             'fecha_adquisicion',
             'ultimo_cambio'
         ]
 
-    def get_cantidad_prestamos(self, obj):
+    def get_prestamos_activos(self, obj):
         return obj.prestamo_set.filter(estado='enuso').count()
+
+    def get_total_prestamos_historicos(self, obj):
+        return obj.prestamo_set.count()
 
     def get_ultimo_cambio(self, obj):
         ultimo = obj.historial_movimientos.order_by('-fecha_cambio').first()

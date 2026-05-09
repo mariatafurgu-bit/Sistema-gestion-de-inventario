@@ -130,20 +130,20 @@
         <thead>
           <tr>
             <th>Usuario</th>
-            <th>Rol</th>
-            <th>Préstamo Vencido</th>
+            <th>Documento</th>
             <th>Instrumento</th>
-            <th>Días de Mora</th>
+            <th>Fecha Vencimiento</th>
+            <th>Dias de Mora</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let usuario of usuariosMorosos">
-            <td class="usuario">{{ usuario.usuario }}</td>
-            <td>{{ usuario.rol }}</td>
+            <td class="usuario">{{ usuario.usuario_nombre }}</td>
+            <td>{{ usuario.usuario_documento }}</td>
+            <td>{{ usuario.instrumento_nombre }}</td>
             <td class="fecha">{{ usuario.fecha_vencimiento | date:'dd/MM/yyyy' }}</td>
-            <td>{{ usuario.instrumento }}</td>
             <td class="dias-mora">
-              <span class="badge-mora">{{ usuario.dias_mora }} días</span>
+              <span class="badge-mora">{{ usuario.dias_mora }} dias</span>
             </td>
           </tr>
         </tbody>
@@ -161,18 +161,18 @@
           <tr>
             <th>Instrumento</th>
             <th>Categoría</th>
-            <th>Total Préstamos</th>
-            <th>Usuario Último</th>
-            <th>Última Devolución</th>
+            <th>Total Prestamos</th>
+            <th>Prestamos Activos</th>
+            <th>Estado</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let item of usoInstrumentos">
-            <td class="instrumento">{{ item.instrumento }}</td>
-            <td>{{ item.categoria }}</td>
-            <td class="numero">{{ item.total_prestamos }}</td>
-            <td>{{ item.usuario_ultimo || 'N/A' }}</td>
-            <td class="fecha">{{ item.fecha_ultima_devolucion ? (item.fecha_ultima_devolucion | date:'dd/MM/yyyy') : 'N/A' }}</td>
+            <td class="instrumento">{{ item.instrumento_nombre }}</td>
+            <td>{{ item.categoria_nombre }}</td>
+            <td class="numero">{{ item.total_prestamos_historicos }}</td>
+            <td class="numero">{{ item.prestamos_activos }}</td>
+            <td>{{ item.estado }}</td>
           </tr>
         </tbody>
       </table>

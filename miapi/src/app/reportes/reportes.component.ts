@@ -50,7 +50,7 @@ export class ReportesComponent implements OnInit {
     return new Promise((resolve) => {
       this.reporteService.getReporteUsuariosMorosos().subscribe({
         next: (data: any) => {
-          this.usuariosMorosos = Array.isArray(data) ? data : data.results || [];
+          this.usuariosMorosos = data?.results || [];
           resolve();
         },
         error: () => resolve()
@@ -62,7 +62,7 @@ export class ReportesComponent implements OnInit {
     return new Promise((resolve) => {
       this.reporteService.getReporteUsoInstrumentos().subscribe({
         next: (data: any) => {
-          this.usoInstrumentos = Array.isArray(data) ? data : data.results || [];
+          this.usoInstrumentos = data?.results || [];
           resolve();
         },
         error: () => resolve()

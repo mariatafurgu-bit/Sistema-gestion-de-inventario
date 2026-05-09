@@ -35,7 +35,8 @@ export interface ReporteEstadoInstrumento {
   modelo?: string;
   ubicacion_fisica?: string;
   cantidad: number;
-  cantidad_prestamos: number;
+  prestamos_activos: number;
+  total_prestamos_historicos: number;
   valor_reemplazo?: number;
   fecha_adquisicion?: string;
   ultimo_cambio?: string;
@@ -50,4 +51,5 @@ export interface ApiResponse<T> {
   instrumentos?: T[];
   reportes?: T[];
   usuarios?: T[];
+  results?: T[];
 }

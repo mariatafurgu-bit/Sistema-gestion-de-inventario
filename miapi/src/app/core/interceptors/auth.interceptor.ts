@@ -25,7 +25,7 @@ export class AuthInterceptor implements HttpInterceptor {
       withCredentials: true,  // Permitir envío de cookies de sesión
     });
     
-    // Si hay CSRF token y NO es una solicitud GET, incluirlo en el header X-CSRFToken
+    // Non-GET requests need CSRF header for Django session auth.
     if (csrfToken && request.method !== 'GET') {
       clonedRequest = clonedRequest.clone({
         setHeaders: {

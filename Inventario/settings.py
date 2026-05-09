@@ -14,7 +14,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
+# Cargar variables de entorno para separar config sensible del codigo.
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -50,6 +50,7 @@ INSTALLED_APPS = [
 ]
 
 REST_FRAMEWORK = {
+    # Session auth for browser-based Angular + Django.
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
     ],
@@ -145,18 +146,22 @@ CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:4200',
+    'http://localhost:4201',
     'http://localhost:3000',
     'http://127.0.0.1:4200',
+    'http://127.0.0.1:4201',
     'http://127.0.0.1:3000',
 ]
 
 # ✅ IMPORTANTE: Permitir cookies/credenciales en CORS
 CORS_ALLOW_CREDENTIALS = True
 
-# Configuración CSRF
+# Configuración CSRF para permitir origenes del frontend.
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:4200',
+    'http://localhost:4201',
     'http://127.0.0.1:4200',
+    'http://127.0.0.1:4201',
 ]
 
 # Static files (CSS, JavaScript, Images)

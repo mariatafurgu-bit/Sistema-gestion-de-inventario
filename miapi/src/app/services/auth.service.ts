@@ -12,6 +12,8 @@ export class AuthService {
   private currentUserSubject: BehaviorSubject<User | null> = new BehaviorSubject<User | null>(null);
   public currentUser$: Observable<User | null> = this.currentUserSubject.asObservable();
 
+  // Session-based auth: no tokens, server cookie is the source of truth.
+
   constructor(private http: HttpClient) {
     console.log('🔐 AuthService inicializado (sin localStorage)');
   }

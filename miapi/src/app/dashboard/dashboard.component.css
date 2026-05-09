@@ -1276,3 +1276,100 @@ textarea:focus {
         max-width: 95vw;
     }
 }
+
+/* RETURN MODAL */
+#returnLoanInfo {
+    margin: 1rem 1.5rem 0;
+}
+
+.return-card {
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 55%);
+    padding: 1rem 1.25rem;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.return-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.return-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0F172A;
+    margin: 0;
+}
+
+.return-card-subtitle {
+    font-size: 0.85rem;
+    color: #64748B;
+    margin: 0.25rem 0 0;
+}
+
+.return-chip {
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    background: #DBEAFE;
+    color: #1D4ED8;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.return-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.return-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: #F8FAFC;
+}
+
+.return-label {
+    font-size: 0.75rem;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.return-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0F172A;
+    text-align: right;
+    word-break: break-word;
+}
+
+@media (max-width: 640px) {
+    #returnLoanInfo {
+        margin: 1rem 1rem 0;
+    }
+
+    .return-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .return-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .return-value {
+        text-align: left;
+        width: 100%;
+    }
+}

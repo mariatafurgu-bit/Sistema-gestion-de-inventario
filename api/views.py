@@ -32,6 +32,7 @@ from .serializers import (
 # PERMISOS PERSONALIZADOS
 # =========================
 
+# Role-based gates used by the viewsets below.
 class EsAdministrador(BasePermission):
     """Solo administrador tiene acceso."""
     def has_permission(self, request, view):
@@ -468,58 +469,53 @@ class ReportesViewSet(viewsets.ViewSet):
     def reporte_uso_instrumentos(self, request):
         """Reporte de uso de instrumentos (cuántas veces se prestan, etc)."""
         instrumentos = Instrumento.objects.annotate(
-            total_prestamos=Count('prestamo', filter=Q(prestamo__estado='disponible')),
+            total_prestamos_historicos=Count('prestamo'),
             prestamos_activos=Count('prestamo', filter=Q(prestamo__estado='enuso'))
         )
 
         data = []
         for instr in instrumentos:
             data.append({
-                'id': instr.id,
-                'nombre': instr.nombre,
-                'referencia': instr.referencia,
-                'categoria': instr.categoria.nombre,
+                'instrumento_id': instr.id,
+                'instrumento_nombre': instr.nombre,
+                'instrumento_referencia': instr.referencia,
+                'categoria_nombre': instr.categoria.nombre,
                 'estado': instr.estado,
-                'total_prestamos': instr.total_prestamos,
+                'total_prestamos_historicos': instr.total_prestamos_historicos,
                 'prestamos_activos': instr.prestamos_activos,
             })
 
         return Response({
             'total_instrumentos': len(data),
-            'reportes': data
+            'results': data
         })
 
     @action(detail=False, methods=['get'])
     def reporte_usuarios_morosos(self, request):
         """Reporte de usuarios con préstamos vencidos."""
         prestamos_vencidos = Prestamo.prestamos_vencidos()
-        
-        usuarios_morosos = {}
+
+        results = []
+        usuario_ids = set()
         for prestamo in prestamos_vencidos:
-            usuario_id = prestamo.usuario.id
-            if usuario_id not in usuarios_morosos:
-                usuarios_morosos[usuario_id] = {
-                    'usuario': {
-                        'id': prestamo.usuario.id,
-                        'nombre': prestamo.usuario.nombre,
-                        'documento': prestamo.usuario.documento,
-                        'correo': prestamo.usuario.correo,
-                        'telefono': prestamo.usuario.telefono,
-                    },
-                    'prestamos_vencidos': []
-                }
-            
-            usuarios_morosos[usuario_id]['prestamos_vencidos'].append({
-                'instrumento': prestamo.instrumento.nombre,
-                'referencia': prestamo.instrumento.referencia,
+            usuario_ids.add(prestamo.usuario.id)
+            results.append({
+                'usuario_id': prestamo.usuario.id,
+                'usuario_nombre': prestamo.usuario.nombre,
+                'usuario_documento': prestamo.usuario.documento,
+                'usuario_correo': prestamo.usuario.correo,
+                'usuario_telefono': prestamo.usuario.telefono,
+                'instrumento_nombre': prestamo.instrumento.nombre,
+                'instrumento_referencia': prestamo.instrumento.referencia,
                 'fecha_prestamo': str(prestamo.fecha_prestamo),
                 'fecha_vencimiento': str(prestamo.fecha_vencimiento),
-                'dias_vencido': (timezone.now().date() - prestamo.fecha_vencimiento).days
+                'dias_mora': (timezone.now().date() - prestamo.fecha_vencimiento).days
             })
 
         return Response({
-            'total_usuarios_morosos': len(usuarios_morosos),
-            'usuarios': list(usuarios_morosos.values())
+            'total_usuarios_morosos': len(usuario_ids),
+            'total_prestamos_vencidos': len(results),
+            'results': results
         })
 
     @action(detail=False, methods=['get'])

@@ -24,8 +24,8 @@
       <option value="">Todos los Estados</option>
       <option value="disponible">Disponible</option>
       <option value="prestado">Préstado</option>
-      <option value="reparacion">En Reparación</option>
-      <option value="descartado">Descartado</option>
+      <option value="mantenimiento">En Reparación</option>
+      <option value="baja">Fuera de Servicio</option>
     </select>
     <select [(ngModel)]="filtroCategoria" class="filter-select">
       <option value="">Todas las Categorías</option>
@@ -54,6 +54,13 @@
         <p><strong>Categoría:</strong> {{ getCategoriaName(Number(inst.categoria)) }}</p>
         <p><strong>Cantidad:</strong> {{ inst.cantidad }}</p>
         <p *ngIf="inst.marca" class="description">Marca: {{ inst.marca }}</p>
+        <p *ngIf="inst.numero_serie" class="description">No. Serie: {{ inst.numero_serie }}</p>
+        <p *ngIf="inst.condicion" class="description">Condición: {{ inst.condicion }}</p>
+        <p *ngIf="inst.ubicacion_fisica" class="description">Ubicación: {{ inst.ubicacion_fisica }}</p>
+        <p *ngIf="inst.valor_reemplazo !== null && inst.valor_reemplazo !== undefined" class="description">
+          Valor de reemplazo: {{ inst.valor_reemplazo }}
+        </p>
+        <p *ngIf="inst.fecha_adquisicion" class="description">Adquisición: {{ inst.fecha_adquisicion }}</p>
         <p *ngIf="inst.observaciones" class="description">{{ inst.observaciones }}</p>
       </div>
 
@@ -117,6 +124,41 @@
         <div class="form-group">
           <label>Modelo</label>
           <input type="text" [(ngModel)]="newInstrumento.modelo" name="modelo" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>No. Serie</label>
+          <input type="text" [(ngModel)]="newInstrumento.numero_serie" name="numero_serie" />
+        </div>
+
+        <div class="form-group">
+          <label>Condición</label>
+          <select [(ngModel)]="newInstrumento.condicion" name="condicion">
+            <option value="">Selecciona</option>
+            <option value="Excelente">Excelente</option>
+            <option value="Buena">Buena</option>
+            <option value="Regular">Regular</option>
+            <option value="Requiere Reparación">Requiere Reparación</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Fecha de adquisición</label>
+        <input type="date" [(ngModel)]="newInstrumento.fecha_adquisicion" name="fecha_adquisicion" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ubicación</label>
+          <input type="text" [(ngModel)]="newInstrumento.ubicacion_fisica" name="ubicacion_fisica" />
+        </div>
+
+        <div class="form-group">
+          <label>Valor de reemplazo</label>
+          <input type="number" [(ngModel)]="newInstrumento.valor_reemplazo" name="valor_reemplazo" min="0" />
         </div>
       </div>
 
