@@ -364,17 +364,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
                 <i class="bi bi-clock-history"></i>
               </button>
               ` : ''}
-              ${(this.isAdmin() && inst.estado !== 'baja' && inst.estado !== 'prestado') ? `
-              <button class="btn-icon btn-out" onclick="dashboard.openDarBajaModal('${inst.id}')" title="Dar de baja">
-                <i class="bi bi-slash-circle"></i>
-              </button>
-              ` : ''}
               <button class="btn-icon btn-edit" onclick="dashboard.editInstrument('${inst.id}')" title="Editar">
                 <i class="bi bi-pencil"></i>
               </button>
-              <button class="btn-icon btn-delete" onclick="dashboard.deleteInstrument('${inst.id}')" title="Eliminar">
+              ${(this.isAdmin() && inst.estado !== 'baja' && inst.estado !== 'prestado') ? `
+              <button class="btn-icon btn-delete" onclick="dashboard.openDarBajaModal('${inst.id}')" title="Dar de baja">
                 <i class="bi bi-trash"></i>
               </button>
+              ` : ''}
             </div>
           </div>
 
@@ -871,10 +868,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     const idNum = parseInt(instrumentId, 10);
-    this.instrumentoParaBaja = this.instruments.find(i => Number(i.id) === idNum);
+    this.instrumentoParaBaja = this.instruments.find(i => Number(i.id) === idNum) || null;
 
     const modal = document.getElementById('darBajaModal');
-    if (modal) modal.classList.add('active');
+    if (modal) {
+      this.cdr.detectChanges();
+      setTimeout(() => modal.classList.add('active'), 0);
+    }
+
+    this.instrumentoService.getInstrumento(idNum).subscribe({
+      next: (instrumento: any) => {
+        this.instrumentoParaBaja = instrumento;
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error cargando instrumento para baja:', err);
+      }
+    });
   }
 
   closeDarBajaModal(): void {
